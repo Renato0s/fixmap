@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FixMap AI - Кыргызстан</title>
+    <title>FixMap AI - Система управления</title>
     
     <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -33,6 +33,12 @@
         .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #3b82f6; box-shadow: 0 0 10px #3b82f6; animation: scan 2s linear infinite; z-index: 10; }
         @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
         #app-loader { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
+        
+        /* Стили для скроллбара */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body>
@@ -45,7 +51,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // Глобальный перехват ошибок
+        // Global Error Handler
         window.onerror = function(msg, url, line) {
             console.error("Global error:", msg);
             const loader = document.getElementById('app-loader');
@@ -57,58 +63,54 @@
             return false;
         };
 
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        // --- ВАШ КЛЮЧ GEMINI ---
+        // --- API CONFIGURATION ---
         const apiKey = "AIzaSyAoue6cl9st8fdqZ9N-nHNror7eH_R1RxU"; 
 
-        // --- БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ FIREBASE ---
+        // --- FIREBASE INIT ---
         let auth = null;
         let db = null;
         let isFirebaseAvailable = false;
         
         try {
-            // Проверяем, есть ли конфиг от Vercel
             const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-            
             if (config) {
                 if (!firebase.apps.length) firebase.initializeApp(config);
                 auth = firebase.auth();
                 db = firebase.firestore();
-                
-                // Исправление ошибки конфликта настроек
-                try {
-                    db.settings({ merge: true });
-                } catch(err) {
-                    console.warn("DB settings warning:", err);
-                }
-                
+                try { db.settings({ merge: true }); } catch(err) { console.warn("DB settings warning:", err); }
                 isFirebaseAvailable = true;
-            } else {
-                console.log("Режим ДЕМО: Конфигурация базы данных не найдена (но ИИ будет работать!).");
             }
         } catch (e) {
-            console.error("Ошибка Firebase:", e);
+            console.error("Firebase error:", e);
             isFirebaseAvailable = false;
         }
 
-        const appId = 'fixmap-public-demo';
+        const appId = 'fixmap-public-demo-v2';
 
-        // --- УТИЛИТЫ ---
-        const fileToBase64 = (file) => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => {
-                    let encoded = reader.result.toString().replace(/^data:(.*,)?/, '');
-                    if ((encoded.length % 4) > 0) { encoded += '='.repeat(4 - (encoded.length % 4)); }
-                    resolve(encoded);
-                };
-                reader.onerror = error => reject(error);
-            });
+        // --- UTILS ---
+        const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+                let encoded = reader.result.toString().replace(/^data:(.*,)?/, '');
+                if ((encoded.length % 4) > 0) { encoded += '='.repeat(4 - (encoded.length % 4)); }
+                resolve(encoded);
+            };
+            reader.onerror = error => reject(error);
+        });
+
+        const formatDate = (dateInput) => {
+            if (!dateInput) return "Недавно";
+            // Handle Firestore Timestamp or standard Date
+            const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
+            return new Intl.DateTimeFormat('ru-RU', { 
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+            }).format(date);
         };
 
-        // --- ТЕКСТЫ ---
+        // --- TRANSLATIONS ---
         const translations = {
             ru: {
                 welcome: "Добро пожаловать",
@@ -128,14 +130,24 @@
                 submit_btn: "Отправить заявку",
                 chat_title: "Городской советник",
                 chat_placeholder: "Спросите про законы...",
-                demo_warning: "⚠️ Демо-режим (Без БД)",
-                solution_title: "Техническое решение",
+                demo_warning: "⚠️ Демо-режим",
                 fio_label: "ФИО Заявителя",
                 address_label: "Адрес или ориентир",
                 geo_btn: "Геолокация",
                 geo_ok: "Координаты определены",
-                fio_placeholder: "Иванов И.И.",
-                address_placeholder: "ул. Манаса 45"
+                admin_login: "Вход для сотрудников",
+                admin_panel: "Панель управления Мэрии",
+                login_title: "Авторизация",
+                login_btn: "Войти в систему",
+                logout: "Выйти",
+                filter_all: "Все заявки",
+                filter_new: "Новые",
+                filter_work: "В работе",
+                filter_done: "Решено",
+                status_change: "Сменить статус:",
+                stats_total: "Всего",
+                stats_new: "Новых",
+                stats_done: "Решено"
             },
             ky: {
                 welcome: "Кош келиңиз",
@@ -155,18 +167,28 @@
                 submit_btn: "Арызды жөнөтүү",
                 chat_title: "Шаардык кеңешчи",
                 chat_placeholder: "Мыйзамдар жөнүндө сураңыз...",
-                demo_warning: "⚠️ Демо режим (Базасыз)",
-                solution_title: "Техникалык чечим",
+                demo_warning: "⚠️ Демо режим",
                 fio_label: "Арыз ээси",
                 address_label: "Дарек",
                 geo_btn: "Геолокация",
                 geo_ok: "Координаттар табылды",
-                fio_placeholder: "Асанов А.",
-                address_placeholder: "Манас көч. 45"
+                admin_login: "Кызматкерлер үчүн кирүү",
+                admin_panel: "Мэриянын башкаруу панели",
+                login_title: "Авторизация",
+                login_btn: "Кирүү",
+                logout: "Чыгуу",
+                filter_all: "Баары",
+                filter_new: "Жаңы",
+                filter_work: "Иште",
+                filter_done: "Бүттү",
+                status_change: "Статусту өзгөртүү:",
+                stats_total: "Жалпы",
+                stats_new: "Жаңы",
+                stats_done: "Бүттү"
             }
         };
 
-        // --- ИИ СЕРВИСЫ ---
+        // --- GEMINI SERVICE ---
         const callGemini = async (payload, endpoint = "generateContent") => {
             if (!apiKey) throw new Error("NO_API_KEY");
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:${endpoint}?key=${apiKey}`;
@@ -175,7 +197,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) throw new Error("Gemini API Error: " + response.statusText);
+            if (!response.ok) throw new Error("API Error");
             return await response.json();
         };
 
@@ -183,57 +205,41 @@
             try {
                 const base64Image = await fileToBase64(file);
                 const prompt = `Ты - ИИ-инженер. Язык: ${lang === 'ky' ? 'Кыргызский' : 'Русский'}.
-                Проанализируй фото проблемы ЖКХ. 
-                ВЕРНИ СТРОГО JSON без markdown (без \`\`\`json):
+                Проанализируй фото проблемы ЖКХ. Верни строго JSON:
                 {
                     "type": "Тип проблемы",
                     "category": "Категория",
                     "dept": "Служба",
-                    "severity": "Высокая/Средняя",
-                    "description": "Описание (1 предл)",
-                    "safety_tips": "Совет",
-                    "consequences": "Последствия",
-                    "solution": "Решение",
-                    "icon": "AlertTriangle"
+                    "severity": "Высокая/Средняя/Низкая",
+                    "description": "Описание (1 предл)"
                 }`;
-                
                 const data = await callGemini({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64Image } }] }] });
                 let text = data.candidates[0].content.parts[0].text;
-                // Очистка от markdown, если ИИ всё-таки их добавит
                 text = text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (error) {
-                console.warn("AI Analysis failed:", error);
-                alert("Ошибка ИИ. Проверьте ключ или интернет. Используем демо-данные.");
-                // Fallback данные, чтобы приложение не зависло
+                console.warn("AI fail:", error);
                 return {
-                    type: "Ошибка анализа",
-                    category: "Неизвестно",
+                    type: "Проблема (Демо)",
+                    category: "Разное",
                     dept: "Мэрия",
-                    severity: "Низкая",
-                    description: "Не удалось проанализировать фото.",
-                    safety_tips: "-",
-                    consequences: "-",
-                    solution: "-",
-                    icon: "AlertCircle"
+                    severity: "Средняя",
+                    description: "Автоматический анализ не удался."
                 };
             }
         };
 
-        // --- КОМПОНЕНТ ИКОНКИ ---
-        const toPascalCase = (str) => str ? str.replace(/(^\w|-\w)/g, (clear) => clear.replace('-', '').toUpperCase()) : '';
-
+        // --- ICON COMPONENT ---
+        const toPascalCase = (str) => str ? str.replace(/(^\w|-\w)/g, (c) => c.replace('-', '').toUpperCase()) : '';
         const Icon = ({ name, size = 20, className }) => {
             const [iconNode, setIconNode] = useState(null);
             useEffect(() => {
                 const lucide = window.lucide;
                 if (!lucide || !lucide.icons) return;
-                const pascalName = toPascalCase(name);
-                const iconData = lucide.icons[pascalName] || lucide.icons.AlertTriangle;
-                if (iconData) setIconNode(iconData);
+                const iconData = lucide.icons[toPascalCase(name)] || lucide.icons.AlertCircle;
+                setIconNode(iconData);
             }, [name]);
-            
-            if (!iconNode) return <span className="w-5 h-5 inline-block bg-gray-200 rounded-full"></span>;
+            if (!iconNode) return <span className="w-5 h-5 block bg-gray-200 rounded"></span>;
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                     {iconNode.map(([tag, attrs], i) => React.createElement(tag, { ...attrs, key: i }))}
@@ -241,60 +247,58 @@
             );
         };
 
-        // --- ГЛАВНОЕ ПРИЛОЖЕНИЕ ---
+        // --- MAIN APP ---
         const App = () => {
             const [view, setView] = useState('lang_select');
             const [lang, setLang] = useState('ru');
             const [reports, setReports] = useState([]); 
             
-            // Данные новой заявки
+            // New Report State
             const [selectedFile, setSelectedFile] = useState(null);
             const [previewUrl, setPreviewUrl] = useState(null);
             const [aiAnalysis, setAiAnalysis] = useState(null);
-            
-            // Поля ввода
             const [fio, setFio] = useState('');
             const [manualAddress, setManualAddress] = useState('');
             const [location, setLocation] = useState(null);
             
-            // Чат
+            // Chat State
             const [showChat, setShowChat] = useState(false);
             const [chatMsg, setChatMsg] = useState([]);
             const [chatInput, setChatInput] = useState('');
             const [chatLoading, setChatLoading] = useState(false);
 
+            // Admin State
+            const [adminEmail, setAdminEmail] = useState('');
+            const [adminPass, setAdminPass] = useState('');
+            const [filterStatus, setFilterStatus] = useState('all'); // all, new, work, done
+
             const T = translations[lang];
 
             useEffect(() => {
-                const loader = document.getElementById('app-loader');
-                if(loader) loader.style.display = 'none';
-                
-                if (isFirebaseAvailable && auth) {
-                    auth.signInAnonymously().catch(e => console.warn("Auth failed, working offline", e));
-                }
+                document.getElementById('app-loader').style.display = 'none';
+                if (isFirebaseAvailable && auth) auth.signInAnonymously().catch(console.warn);
             }, []);
 
-            // Загрузка ленты
+            // Reports Listener
             useEffect(() => {
                 if (isFirebaseAvailable && db) {
-                     const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').orderBy('createdAt', 'desc').limit(20);
-                     const timer = setTimeout(() => { if(reports.length === 0) console.log("Firestore slow..."); }, 3000);
+                     const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').orderBy('createdAt', 'desc').limit(50);
                      const unsub = q.onSnapshot(
-                        s => { clearTimeout(timer); setReports(s.docs.map(d => ({id: d.id, ...d.data()}))); }, 
-                        err => { clearTimeout(timer); console.log("Firestore error, using local state.", err); }
+                        s => setReports(s.docs.map(d => ({id: d.id, ...d.data()}))), 
+                        err => console.log("Offline mode active")
                     );
-                     return () => { clearTimeout(timer); unsub(); };
+                     return () => unsub();
                 }
             }, []);
 
+            // --- ACTIONS ---
             const handleFileSelect = async (e) => {
                 if (e.target.files?.[0]) {
                     const file = e.target.files[0];
                     setSelectedFile(file);
                     setPreviewUrl(URL.createObjectURL(file));
                     setView('analyzing');
-                    
-                    await new Promise(r => setTimeout(r, 1000)); // Косметика
+                    await new Promise(r => setTimeout(r, 1000));
                     const result = await analyzeImageWithGemini(file, lang);
                     setAiAnalysis(result);
                     setView('result');
@@ -307,36 +311,31 @@
                         (pos) => setLocation({lat: pos.coords.latitude, lng: pos.coords.longitude}),
                         () => alert("GPS недоступен")
                     );
-                } else {
-                    alert("GPS не поддерживается");
-                }
-            }
+                } else alert("Нет GPS");
+            };
 
             const submitReport = async () => {
                 const newReport = {
                     ...aiAnalysis,
                     fio: fio || "Аноним",
                     address: manualAddress || "Не указан",
+                    location: location,
                     createdAt: new Date(),
-                    status: 'Новая',
+                    status: 'Новая', // New, In Progress (В работе), Done (Решено)
                     id: Date.now().toString()
                 };
                 
-                // Оффлайн сохранение (мгновенно)
-                setReports([newReport, ...reports]);
+                setReports([newReport, ...reports]); // Optimistic update
                 
-                // Попытка облачного сохранения
                 if (isFirebaseAvailable && db) {
                     try {
                         await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({
                             ...newReport,
                             createdAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
-                    } catch(e) { console.warn("Cloud save failed."); }
+                    } catch(e) {}
                 }
-                
-                // Сброс
-                setFio(''); setManualAddress(''); setLocation(null);
+                setFio(''); setManualAddress(''); setLocation(null); setAiAnalysis(null);
                 setView('home');
             };
 
@@ -347,26 +346,169 @@
                 setChatMsg(prev => [...prev, {role: 'user', text: userText}]);
                 setChatInput('');
                 setChatLoading(true);
-                
                 try {
-                    const data = await callGemini({ contents: [{ parts: [{ text: `Вопрос по ЖКХ КР: ${userText}` }] }] });
-                    const reply = data.candidates[0].content.parts[0].text;
-                    setChatMsg(prev => [...prev, {role: 'user', text: userText}, {role: 'ai', text: reply}]);
+                    const data = await callGemini({ contents: [{ parts: [{ text: userText }] }] });
+                    setChatMsg(prev => [...prev, {role: 'user', text: userText}, {role: 'ai', text: data.candidates[0].content.parts[0].text}]);
                 } catch(e) {
-                    setChatMsg(prev => [...prev, {role: 'ai', text: "Ошибка связи с ИИ."}]);
+                    setChatMsg(prev => [...prev, {role: 'ai', text: "Ошибка связи."}]);
                 }
                 setChatLoading(false);
             };
 
-            // ЭКРАНЫ
+            // --- ADMIN ACTIONS ---
+            const handleAdminLogin = () => {
+                if (adminEmail === 'admin@gov.kg' && adminPass === '123') {
+                    setView('admin_dashboard');
+                    setAdminEmail(''); setAdminPass('');
+                } else {
+                    alert('Неверный логин или пароль');
+                }
+            };
+
+            const updateStatus = async (reportId, newStatus) => {
+                // Local update
+                setReports(reports.map(r => r.id === reportId ? {...r, status: newStatus} : r));
+                
+                // Cloud update
+                if (isFirebaseAvailable && db) {
+                    try {
+                        const ref = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').doc(reportId);
+                        // Try update, if ID is from local array it might fail in Firestore if not synced yet, which is fine for demo
+                        await ref.update({ status: newStatus }); 
+                    } catch(e) { console.log("Status update local only"); }
+                }
+            };
+
+            // Filter reports for admin
+            const filteredReports = useMemo(() => {
+                if (filterStatus === 'all') return reports;
+                if (filterStatus === 'new') return reports.filter(r => r.status === 'Новая');
+                if (filterStatus === 'work') return reports.filter(r => r.status === 'В работе');
+                if (filterStatus === 'done') return reports.filter(r => r.status === 'Решено');
+                return reports;
+            }, [reports, filterStatus]);
+
+            const stats = useMemo(() => ({
+                total: reports.length,
+                new: reports.filter(r => r.status === 'Новая').length,
+                done: reports.filter(r => r.status === 'Решено').length
+            }), [reports]);
+
+
+            // --- VIEWS ---
             if (view === 'lang_select') {
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 p-6 text-white text-center">
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 p-6 text-white text-center relative">
                         <div className="bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/20 shadow-2xl w-full max-w-sm">
                             <Icon name="globe" size={48} className="mx-auto mb-4 text-blue-200" />
                             <h1 className="text-3xl font-bold mb-8">FixMap AI</h1>
                             <button onClick={() => {setLang('ky'); setView('home');}} className="w-full bg-white text-blue-800 font-bold py-4 rounded-xl mb-3 hover:bg-blue-50 transition">Кыргызча 🇰🇬</button>
                             <button onClick={() => {setLang('ru'); setView('home');}} className="w-full bg-blue-500/50 border border-white/30 text-white font-bold py-4 rounded-xl hover:bg-blue-500/70 transition">Русский 🇷🇺</button>
+                        </div>
+                        <button onClick={() => setView('admin_login')} className="absolute bottom-8 text-blue-200 text-sm opacity-60 hover:opacity-100 flex items-center gap-2">
+                            <Icon name="shield" size={14}/> {T.admin_login}
+                        </button>
+                    </div>
+                );
+            }
+
+            if (view === 'admin_login') {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-6">
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-xl font-bold text-gray-800">{T.login_title}</h2>
+                                <button onClick={() => setView('lang_select')}><Icon name="x" className="text-gray-400"/></button>
+                            </div>
+                            <input value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="Email (admin@gov.kg)" className="w-full bg-gray-50 border p-3 rounded-xl mb-3 outline-none"/>
+                            <input value={adminPass} onChange={e => setAdminPass(e.target.value)} type="password" placeholder="Password (123)" className="w-full bg-gray-50 border p-3 rounded-xl mb-6 outline-none"/>
+                            <button onClick={handleAdminLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700">{T.login_btn}</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'admin_dashboard') {
+                return (
+                    <div className="min-h-screen bg-gray-50 flex flex-col">
+                        <div className="bg-white border-b p-4 sticky top-0 z-20 shadow-sm flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <div className="bg-blue-600 text-white p-1.5 rounded"><Icon name="layout-dashboard" size={20}/></div>
+                                <h2 className="font-bold text-gray-800 text-sm leading-tight">{T.admin_panel}</h2>
+                            </div>
+                            <button onClick={() => setView('lang_select')} className="text-red-500 text-xs font-bold px-3 py-1 bg-red-50 rounded-lg">{T.logout}</button>
+                        </div>
+                        
+                        <div className="p-4 flex gap-2 overflow-x-auto">
+                            <div className="bg-white p-3 rounded-xl border flex-1 min-w-[100px] shadow-sm">
+                                <div className="text-xs text-gray-500 mb-1">{T.stats_total}</div>
+                                <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+                            </div>
+                            <div className="bg-white p-3 rounded-xl border flex-1 min-w-[100px] shadow-sm">
+                                <div className="text-xs text-gray-500 mb-1">{T.stats_new}</div>
+                                <div className="text-2xl font-bold text-orange-500">{stats.new}</div>
+                            </div>
+                            <div className="bg-white p-3 rounded-xl border flex-1 min-w-[100px] shadow-sm">
+                                <div className="text-xs text-gray-500 mb-1">{T.stats_done}</div>
+                                <div className="text-2xl font-bold text-green-600">{stats.done}</div>
+                            </div>
+                        </div>
+
+                        <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+                            {[
+                                {k: 'all', l: T.filter_all}, 
+                                {k: 'new', l: T.filter_new}, 
+                                {k: 'work', l: T.filter_work}, 
+                                {k: 'done', l: T.filter_done}
+                            ].map(f => (
+                                <button key={f.k} onClick={() => setFilterStatus(f.k)} 
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterStatus === f.k ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border'}`}>
+                                    {f.l}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+                            {filteredReports.map(r => (
+                                <div key={r.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex gap-2">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                                r.status === 'Новая' ? 'bg-orange-100 text-orange-700' :
+                                                r.status === 'В работе' ? 'bg-blue-100 text-blue-700' :
+                                                'bg-green-100 text-green-700'
+                                            }`}>{r.status}</span>
+                                            <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{formatDate(r.createdAt)}</span>
+                                        </div>
+                                        <div className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded">{r.severity}</div>
+                                    </div>
+                                    
+                                    <h3 className="font-bold text-gray-800">{r.type}</h3>
+                                    <p className="text-xs text-gray-600 mt-1 mb-3">{r.description}</p>
+                                    
+                                    <div className="bg-gray-50 rounded-lg p-2 mb-3 space-y-1">
+                                        <div className="flex items-center gap-2 text-xs text-gray-700">
+                                            <Icon name="user" size={12} className="text-blue-500"/>
+                                            <span className="font-medium">{r.fio}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-gray-700">
+                                            <Icon name="map-pin" size={12} className="text-red-500"/>
+                                            <span className="font-medium">{r.address}</span>
+                                        </div>
+                                        {r.location && (
+                                            <a href={`https://www.google.com/maps?q=${r.location.lat},${r.location.lng}`} target="_blank" className="text-[10px] text-blue-500 hover:underline flex items-center gap-1 mt-1 pl-5">
+                                                Показать на карте <Icon name="external-link" size={10}/>
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2 pt-2 border-t">
+                                        <button onClick={() => updateStatus(r.id, 'В работе')} className="flex-1 bg-blue-50 text-blue-700 py-2 rounded-lg text-xs font-bold hover:bg-blue-100">В работу</button>
+                                        <button onClick={() => updateStatus(r.id, 'Решено')} className="flex-1 bg-green-50 text-green-700 py-2 rounded-lg text-xs font-bold hover:bg-green-100">Решено</button>
+                                    </div>
+                                </div>
+                            ))}
+                            {filteredReports.length === 0 && <div className="text-center text-gray-400 py-10">Список пуст</div>}
                         </div>
                     </div>
                 );
@@ -396,7 +538,6 @@
                                 <h2 className="text-2xl font-bold text-white">{aiAnalysis.type}</h2>
                             </div>
                         </div>
-                        
                         <div className="flex-1 p-6 -mt-6 bg-gray-50 rounded-t-3xl relative z-10 space-y-4">
                             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                                 <div className="grid grid-cols-2 gap-4 mb-4">
@@ -405,45 +546,32 @@
                                 </div>
                                 <div className="mb-3"><div className="text-xs text-gray-400 font-bold uppercase">{T.desc_title}</div><p className="text-sm text-gray-700">{aiAnalysis.description}</p></div>
                             </div>
-                            
                             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                                 <div>
                                     <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">{T.fio_label}</label>
                                     <div className="flex items-center bg-gray-50 rounded-xl border px-3 py-1">
                                         <Icon name="user" className="text-gray-400 mr-2" />
-                                        <input 
-                                            type="text" 
-                                            className="w-full bg-transparent p-2 outline-none text-sm" 
-                                            placeholder={T.fio_placeholder}
-                                            value={fio}
-                                            onChange={(e) => setFio(e.target.value)}
-                                        />
+                                        <input type="text" className="w-full bg-transparent p-2 outline-none text-sm" placeholder="Иванов И.И." value={fio} onChange={(e) => setFio(e.target.value)}/>
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">{T.address_label}</label>
                                     <div className="flex items-center bg-gray-50 rounded-xl border px-3 py-1">
                                         <Icon name="map-pin" className="text-gray-400 mr-2" />
-                                        <input 
-                                            type="text" 
-                                            className="w-full bg-transparent p-2 outline-none text-sm" 
-                                            placeholder={T.address_placeholder}
-                                            value={manualAddress}
-                                            onChange={(e) => setManualAddress(e.target.value)}
-                                        />
+                                        <input type="text" className="w-full bg-transparent p-2 outline-none text-sm" placeholder="ул. Манаса 45" value={manualAddress} onChange={(e) => setManualAddress(e.target.value)}/>
                                     </div>
                                 </div>
                                 <button onClick={getLocation} className={`w-full py-2 rounded-xl border text-sm font-bold flex items-center justify-center gap-2 ${location ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-600'}`}>
                                     <Icon name={location ? "check-circle" : "crosshair"} size={16}/> {location ? T.geo_ok : T.geo_btn}
                                 </button>
                             </div>
-
                             <button onClick={submitReport} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition">{T.submit_btn}</button>
                         </div>
                     </div>
                 );
             }
 
+            // HOME
             return (
                 <div className="min-h-screen bg-gray-50 pb-24 relative">
                     <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-b-[2.5rem] shadow-xl relative z-10">
@@ -452,8 +580,6 @@
                             <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 px-3 py-1 rounded-full">{lang.toUpperCase()}</button>
                         </div>
                         <h1 className="text-3xl font-extrabold mb-2">{T.app_subtitle}</h1>
-                        {!isFirebaseAvailable && <p className="text-xs text-yellow-200 bg-yellow-900/30 p-2 rounded inline-block">{T.demo_warning}</p>}
-                        
                         <div className="mt-6 flex gap-3">
                              <label className="flex-1 bg-white text-blue-700 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition">
                                 <Icon name="camera"/> {T.take_photo}
@@ -461,7 +587,6 @@
                             </label>
                         </div>
                     </div>
-
                     <div className="p-4 pt-6">
                         <h2 className="font-bold text-gray-800 mb-4 px-2">{T.feed_title}</h2>
                         {reports.length === 0 ? (
@@ -478,22 +603,17 @@
                                     <div className="flex-1">
                                         <div className="flex justify-between">
                                             <h3 className="font-bold text-gray-800 text-sm">{r.type}</h3>
-                                            <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500 h-fit">{r.category}</span>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded h-fit ${r.status === 'Решено' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{r.status}</span>
                                         </div>
                                         <p className="text-xs text-gray-500 line-clamp-2 mt-1">{r.description}</p>
-                                        <div className="mt-2 flex items-center text-[10px] text-gray-400 gap-2">
-                                            {r.fio && <span className="flex items-center gap-1"><Icon name="user" size={10}/> {r.fio}</span>}
-                                        </div>
                                     </div>
                                 </div>
                             ))
                         )}
                     </div>
-
                     <button onClick={() => setShowChat(!showChat)} className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:bg-blue-700 transition z-50">
                         <Icon name="message-circle" size={28}/>
                     </button>
-
                     {showChat && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                             <div className="bg-white w-full max-w-sm h-[500px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
