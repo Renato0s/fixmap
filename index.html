@@ -5,248 +5,96 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>FixMap AI - Кыргызстан</title>
     
-    <!-- PWA Settings (Для установки на экран) -->
+    <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#2563eb">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <!-- Иконка для Apple (будет видна при добавлении на экран) -->
+    <!-- Icons -->
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/96/maintenance.png">
     <link rel="icon" type="image/png" href="https://img.icons8.com/fluency/96/maintenance.png">
 
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
-    <!-- Babel for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
+    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Lucide Icons -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Firebase SDKs -->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            /* Предотвращаем "пружинивание" страницы на iOS */
-            overscroll-behavior-y: none;
-        }
-
-        /* Анимация сканирования */
-        .scan-line {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: #3b82f6;
-            box-shadow: 0 0 10px #3b82f6;
-            animation: scan 2s linear infinite;
-            z-index: 10;
-        }
-
-        @keyframes scan {
-            0% { top: 0%; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
-        }
-
-        /* Чат */
-        .chat-bubble {
-            max-width: 80%;
-            border-radius: 1rem;
-            padding: 0.75rem 1rem;
-            font-size: 0.9rem;
-            line-height: 1.4;
-        }
-        .chat-user {
-            background-color: #3b82f6;
-            color: white;
-            border-bottom-right-radius: 0.25rem;
-            margin-left: auto;
-        }
-        .chat-ai {
-            background-color: #f3f4f6;
-            color: #1f2937;
-            border-bottom-left-radius: 0.25rem;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overscroll-behavior-y: none; }
+        .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #3b82f6; box-shadow: 0 0 10px #3b82f6; animation: scan 2s linear infinite; z-index: 10; }
+        @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+        #app-loader { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
     </style>
 </head>
 <body>
+    <div id="app-loader">
+        <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h2 class="text-xl font-bold text-gray-800">Запуск FixMap...</h2>
+        <p id="error-display" class="text-red-500 text-xs mt-4 px-4 text-center hidden"></p>
+    </div>
+
     <div id="root"></div>
 
     <script type="text/babel">
+        // Глобальный перехват ошибок
+        window.onerror = function(msg, url, line) {
+            console.error("Global error:", msg);
+            const loader = document.getElementById('app-loader');
+            if(loader && loader.style.display !== 'none') {
+                const errDiv = document.getElementById('error-display');
+                errDiv.style.display = 'block';
+                errDiv.innerText = `Ошибка: ${msg}`;
+            }
+            return false;
+        };
+
         const { useState, useEffect, useRef } = React;
 
-        // --- Gemini API Configuration ---
-        const apiKey = ""; // Ключ подставляется средой выполнения
+        // --- ВАШ КЛЮЧ GEMINI ---
+        const apiKey = "AIzaSyAoue6cl9st8fdqZ9N-nHNror7eH_R1RxU"; 
 
-        // --- Firebase Configuration ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fixmap-kg-demo-v6';
-
-        // --- Translations ---
-        const translations = {
-            ru: {
-                welcome: "Добро пожаловать",
-                select_lang: "Выберите язык",
-                app_subtitle: "Решаем городские проблемы",
-                report_btn: "Сообщить о проблеме",
-                feed_title: "Лента проблем",
-                no_reports: "Пока нет заявок. Станьте первым!",
-                upload_title: "Новая заявка",
-                take_photo: "Сделайте фото",
-                gallery_hint: "Или выберите из галереи",
-                ai_powered: "AI определит проблему, решение и бюджет",
-                analyzing: "Анализ изображения...",
-                result_title: "AI Анализ готов",
-                category: "Категория",
-                severity: "Важность",
-                dept: "Ответственный",
-                desc_title: "Описание проблемы",
-                ai_actions: "Умные действия",
-                legal_btn: "ИИ-Юрист",
-                audio_btn: "Озвучить",
-                cost_btn: "Оценка бюджета",
-                fio_label: "ФИО заявителя (Обязательно)",
-                fio_placeholder: "Иванов Иван Иванович",
-                address_label: "Адрес или ориентир",
-                address_placeholder: "Например: ул. Манаса, возле магазина",
-                geo_btn: "Прикрепить GPS локацию",
-                geo_ok: "GPS координаты добавлены",
-                geo_error: "Не удалось определить",
-                submit_btn: "Отправить заявку",
-                sending: "Отправка...",
-                error_fio: "Пожалуйста, введите ваше ФИО",
-                error_geo: "Пожалуйста, укажите геолокацию или адрес",
-                copied: "Текст скопирован!",
-                legal_modal_title: "ИИ-Юрист: Жалоба",
-                legal_hint: "Текст сгенерирован ИИ. Проверьте перед отправкой.",
-                copy_btn: "Скопировать текст",
-                listen_again: "Слушать снова",
-                live: "Прямой эфир",
-                loc_hidden: "Локация скрыта",
-                safety_title: "Советы по безопасности",
-                impact_title: "Прогноз последствий",
-                solution_title: "Техническое решение (AI)",
-                admin_login_link: "Войти как гос. служащий",
-                admin_login_title: "Вход для сотрудников",
-                email_placeholder: "Корпоративная почта",
-                pass_placeholder: "Пароль",
-                login_btn: "Войти в систему",
-                admin_dash_title: "Панель управления",
-                status_new: "Новая",
-                status_work: "Взять в работу",
-                status_done: "Выполнено",
-                logout: "Выйти",
-                change_status: "Изменить статус:",
-                chat_title: "Городской советник",
-                chat_placeholder: "Спросите про штрафы или законы...",
-                cost_modal_title: "Оценка стоимости ремонта",
-                cost_range: "Примерная стоимость:",
-                cost_breakdown: "Смета работ (расчет ИИ):",
-                admin_analytics_btn: "AI Аналитика города",
-                analytics_modal_title: "Стратегический отчет",
-                analytics_loading: "Генерация отчета по всем заявкам..."
-            },
-            ky: {
-                welcome: "Кош келиңиз",
-                select_lang: "Тилди тандаңыз",
-                app_subtitle: "Шаардык көйгөйлөрдү чечебиз",
-                report_btn: "Көйгөйдү билдирүү",
-                feed_title: "Көйгөйлөр түрмөгү",
-                no_reports: "Азырынча арыздар жок. Биринчи болуңуз!",
-                upload_title: "Жаңы арыз",
-                take_photo: "Сүрөткө тартыңыз",
-                gallery_hint: "Же галереядан тандаңыз",
-                ai_powered: "AI кызматты, чечимди жана бюджетти аныктайт",
-                analyzing: "Сүрөттү талдоо...",
-                result_title: "AI Талдоо даяр",
-                category: "Категория",
-                severity: "Маанилүүлүгү",
-                dept: "Жооптуу",
-                desc_title: "Көйгөйдүн сүрөттөлүшү",
-                ai_actions: "Акылдуу аракеттер",
-                legal_btn: "AI-Юрист",
-                audio_btn: "Угуу",
-                cost_btn: "Бааны баалоо",
-                fio_label: "Арыз ээсинин аты-жөнү (Милдеттүү)",
-                fio_placeholder: "Асанов Асан Асанович",
-                address_label: "Дарек же ориентир",
-                address_placeholder: "Мисалы: Манас көчөсү, дүкөндүн жанында",
-                geo_btn: "GPS локациясын тиркөө",
-                geo_ok: "GPS координаттары кошулду",
-                geo_error: "Аныктоо мүмкүн болбоду",
-                submit_btn: "Арызды жөнөтүү",
-                sending: "Жөнөтүлүүдө...",
-                error_fio: "Сураныч, аты-жөнүңүздү жазыңыз",
-                error_geo: "Сураныч, даректи же жайгашкан жерди белгилеңиз",
-                copied: "Текст көчүрүлдү!",
-                legal_modal_title: "AI-Юрист: Арыз",
-                legal_hint: "Текст AI тарабынан түзүлдү. Жөнөтүүдөн мурун текшериңиз.",
-                copy_btn: "Текстти көчүрүү",
-                listen_again: "Кайра угуу",
-                live: "Түз эфир",
-                loc_hidden: "Локация жашыруун",
-                safety_title: "Коопсуздук кеңештери",
-                impact_title: "Кесепеттердин божомолу",
-                solution_title: "Техникалык чечим (AI)",
-                admin_login_link: "Мамлекеттик кызматкер катары кирүү",
-                admin_login_title: "Кызматкерлер үчүн кирүү",
-                email_placeholder: "Корпоративдик почта",
-                pass_placeholder: "Сыр сөз",
-                login_btn: "Системага кирүү",
-                admin_dash_title: "Башкаруу панели",
-                status_new: "Жаңы",
-                status_work: "Ишке алуу",
-                status_done: "Аткарылды",
-                logout: "Чыгуу",
-                change_status: "Статусту өзгөртүү:",
-                chat_title: "Шаардык кеңешчи",
-                chat_placeholder: "Айып пулдар же мыйзамдар жөнүндө сураңыз...",
-                cost_modal_title: "Оңдоо иштеринин баасы",
-                cost_range: "Болжолдуу баасы:",
-                cost_breakdown: "Иштердин сметасы (AI эсеби):",
-                admin_analytics_btn: "AI Шаардык аналитика",
-                analytics_modal_title: "Стратегиялык отчет",
-                analytics_loading: "Бардык арыздар боюнча отчет даярдалууда..."
+        // --- БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ FIREBASE ---
+        let auth = null;
+        let db = null;
+        let isFirebaseAvailable = false;
+        
+        try {
+            // Проверяем, есть ли конфиг от Vercel
+            const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            
+            if (config) {
+                if (!firebase.apps.length) firebase.initializeApp(config);
+                auth = firebase.auth();
+                db = firebase.firestore();
+                
+                // Исправление ошибки конфликта настроек
+                try {
+                    db.settings({ merge: true });
+                } catch(err) {
+                    console.warn("DB settings warning:", err);
+                }
+                
+                isFirebaseAvailable = true;
+            } else {
+                console.log("Режим ДЕМО: Конфигурация базы данных не найдена (но ИИ будет работать!).");
             }
-        };
+        } catch (e) {
+            console.error("Ошибка Firebase:", e);
+            isFirebaseAvailable = false;
+        }
 
-        // --- Utilities ---
-        const pcmToWav = (base64PCM, sampleRate = 24000) => {
-            const binaryString = atob(base64PCM);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) { bytes[i] = binaryString.charCodeAt(i); }
-            const pcmData = new Int16Array(bytes.buffer);
-            const wavHeader = new ArrayBuffer(44);
-            const view = new DataView(wavHeader);
-            const writeString = (view, offset, string) => { for (let i = 0; i < string.length; i++) { view.setUint8(offset + i, string.charCodeAt(i)); } };
-            writeString(view, 0, 'RIFF'); view.setUint32(4, 36 + pcmData.byteLength, true); writeString(view, 8, 'WAVE'); writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeString(view, 36, 'data');
-            view.setUint32(40, pcmData.byteLength, true);
-            return new Blob([view, pcmData], { type: 'audio/wav' });
-        };
+        const appId = 'fixmap-public-demo';
 
+        // --- УТИЛИТЫ ---
         const fileToBase64 = (file) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -260,918 +108,415 @@
             });
         };
 
-        // --- Gemini Services ---
+        // --- ТЕКСТЫ ---
+        const translations = {
+            ru: {
+                welcome: "Добро пожаловать",
+                app_subtitle: "Решаем городские проблемы",
+                report_btn: "Сообщить о проблеме",
+                feed_title: "Лента проблем",
+                no_reports: "Пока нет заявок. Будьте первым!",
+                upload_title: "Новая заявка",
+                take_photo: "Сделайте фото",
+                gallery_hint: "Или выберите из галереи",
+                analyzing: "Анализ изображения...",
+                result_title: "AI Анализ готов",
+                category: "Категория",
+                severity: "Важность",
+                dept: "Ответственный",
+                desc_title: "Описание проблемы",
+                submit_btn: "Отправить заявку",
+                chat_title: "Городской советник",
+                chat_placeholder: "Спросите про законы...",
+                demo_warning: "⚠️ Демо-режим (Без БД)",
+                solution_title: "Техническое решение",
+                fio_label: "ФИО Заявителя",
+                address_label: "Адрес или ориентир",
+                geo_btn: "Геолокация",
+                geo_ok: "Координаты определены",
+                fio_placeholder: "Иванов И.И.",
+                address_placeholder: "ул. Манаса 45"
+            },
+            ky: {
+                welcome: "Кош келиңиз",
+                app_subtitle: "Шаардык көйгөйлөрдү чечебиз",
+                report_btn: "Көйгөйдү билдирүү",
+                feed_title: "Көйгөйлөр түрмөгү",
+                no_reports: "Азырынча арыздар жок.",
+                upload_title: "Жаңы арыз",
+                take_photo: "Сүрөткө тартыңыз",
+                gallery_hint: "Же галереядан тандаңыз",
+                analyzing: "Сүрөттү талдоо...",
+                result_title: "AI Талдоо даяр",
+                category: "Категория",
+                severity: "Маанилүүлүгү",
+                dept: "Жооптуу",
+                desc_title: "Көйгөйдүн сүрөттөлүшү",
+                submit_btn: "Арызды жөнөтүү",
+                chat_title: "Шаардык кеңешчи",
+                chat_placeholder: "Мыйзамдар жөнүндө сураңыз...",
+                demo_warning: "⚠️ Демо режим (Базасыз)",
+                solution_title: "Техникалык чечим",
+                fio_label: "Арыз ээси",
+                address_label: "Дарек",
+                geo_btn: "Геолокация",
+                geo_ok: "Координаттар табылды",
+                fio_placeholder: "Асанов А.",
+                address_placeholder: "Манас көч. 45"
+            }
+        };
+
+        // --- ИИ СЕРВИСЫ ---
+        const callGemini = async (payload, endpoint = "generateContent") => {
+            if (!apiKey) throw new Error("NO_API_KEY");
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:${endpoint}?key=${apiKey}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("Gemini API Error: " + response.statusText);
+            return await response.json();
+        };
+
         const analyzeImageWithGemini = async (file, lang) => {
-            const base64Image = await fileToBase64(file);
-            const prompt = `Ты - ИИ-инженер и помощник для городских служб Кыргызстана. Язык ответа: ${lang === 'ky' ? 'Кыргызский' : 'Русский'}.
-            Проанализируй изображение городской проблемы.
+            try {
+                const base64Image = await fileToBase64(file);
+                const prompt = `Ты - ИИ-инженер. Язык: ${lang === 'ky' ? 'Кыргызский' : 'Русский'}.
+                Проанализируй фото проблемы ЖКХ. 
+                ВЕРНИ СТРОГО JSON без markdown (без \`\`\`json):
+                {
+                    "type": "Тип проблемы",
+                    "category": "Категория",
+                    "dept": "Служба",
+                    "severity": "Высокая/Средняя",
+                    "description": "Описание (1 предл)",
+                    "safety_tips": "Совет",
+                    "consequences": "Последствия",
+                    "solution": "Решение",
+                    "icon": "AlertTriangle"
+                }`;
+                
+                const data = await callGemini({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64Image } }] }] });
+                let text = data.candidates[0].content.parts[0].text;
+                // Очистка от markdown, если ИИ всё-таки их добавит
+                text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                return JSON.parse(text);
+            } catch (error) {
+                console.warn("AI Analysis failed:", error);
+                alert("Ошибка ИИ. Проверьте ключ или интернет. Используем демо-данные.");
+                // Fallback данные, чтобы приложение не зависло
+                return {
+                    type: "Ошибка анализа",
+                    category: "Неизвестно",
+                    dept: "Мэрия",
+                    severity: "Низкая",
+                    description: "Не удалось проанализировать фото.",
+                    safety_tips: "-",
+                    consequences: "-",
+                    solution: "-",
+                    icon: "AlertCircle"
+                };
+            }
+        };
+
+        // --- КОМПОНЕНТ ИКОНКИ ---
+        const toPascalCase = (str) => str ? str.replace(/(^\w|-\w)/g, (clear) => clear.replace('-', '').toUpperCase()) : '';
+
+        const Icon = ({ name, size = 20, className }) => {
+            const [iconNode, setIconNode] = useState(null);
+            useEffect(() => {
+                const lucide = window.lucide;
+                if (!lucide || !lucide.icons) return;
+                const pascalName = toPascalCase(name);
+                const iconData = lucide.icons[pascalName] || lucide.icons.AlertTriangle;
+                if (iconData) setIconNode(iconData);
+            }, [name]);
             
-            Определи:
-            1. Проблему (type) и Категорию (category).
-            2. Службу (dept) - Тазалык, Зеленстрой, БишкекСвет и т.д.
-            3. Критичность (severity).
-            4. Описание (description) - 2 предложения.
-            5. СОВЕТЫ ПО БЕЗОПАСНОСТИ (safety_tips) - 1 краткий совет для прохожих.
-            6. ПРОГНОЗ ПОСЛЕДСТВИЙ (consequences) - Что будет через неделю.
-            7. ТЕХНИЧЕСКОЕ РЕШЕНИЕ (solution) - Кратко опиши метод ремонта/устранения (например: "Ямочный ремонт асфальтобетоном", "Замена плафона и лампы").
-
-            Верни строго JSON:
-            {
-                "type": "...",
-                "category": "...",
-                "dept": "...",
-                "severity": "...",
-                "description": "...",
-                "safety_tips": "...",
-                "consequences": "...",
-                "solution": "...",
-                "icon": "IconName (AlertTriangle, Trash2, Hammer, Lightbulb, Leaf, Car, Droplet)"
-            }`;
-
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64Image } }] }] })
-                }
-            );
-            const data = await response.json();
-            const text = data.candidates[0].content.parts[0].text;
-            return JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
-        };
-
-        const generateLegalComplaint = async (reportData, lang) => {
-            const prompt = `Действуй как юрист в Кыргызстане. Язык: ${lang === 'ky' ? 'Кыргызский' : 'Русский'}.
-            Составь ОФИЦИАЛЬНУЮ жалобу в мэрию.
-            Контекст: ${JSON.stringify(reportData)}
-            Ссылайся на законы КР о благоустройстве.
-            Верни только текст.`;
-
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                }
-            );
-            return (await response.json()).candidates[0].content.parts[0].text;
-        };
-
-        const generateAudioReport = async (text) => {
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: text }] }],
-                        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } }
-                    })
-                }
-            );
-            const data = await response.json();
-            const base64Audio = data.candidates[0].content.parts[0].inlineData.data;
-            return URL.createObjectURL(pcmToWav(base64Audio));
-        };
-
-        const estimateRepairCost = async (reportData, lang) => {
-            const prompt = `Ты - сметчик в Кыргызстане. Язык: ${lang === 'ky' ? 'Кыргызский' : 'Русский'}.
-            Оцени примерную стоимость устранения проблемы: "${reportData.type}" (${reportData.description}).
-            Валюта: Сом (KGS).
-            
-            Верни JSON:
-            {
-                "min_price": число (примерно),
-                "max_price": число (примерно),
-                "breakdown": "Краткий список работ и материалов (3 пункта)"
-            }`;
-
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                }
-            );
-            const text = (await response.json()).candidates[0].content.parts[0].text;
-            return JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
-        };
-
-        const generateAdminAnalytics = async (reports, lang) => {
-            const reportsSummary = reports.map(r => `- ${r.type} (${r.category}, ${r.severity})`).join("\n");
-            const prompt = `Ты - аналитик мэрии Бишкека. Язык: ${lang === 'ky' ? 'Кыргызский' : 'Русский'}.
-            Проанализируй список текущих проблем в городе:
-            ${reportsSummary}
-            
-            Составь краткий стратегический отчет:
-            1. Основные тренды (что ломается чаще всего?).
-            2. Самые критичные зоны.
-            3. Рекомендации по распределению бюджета.
-            
-            Используй Markdown. Будь краток и профессионален.`;
-
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                }
-            );
-            return (await response.json()).candidates[0].content.parts[0].text;
-        };
-
-        const chatWithGemini = async (history, message, lang) => {
-            const systemPrompt = `Ты - эксперт по городским законам и правилам благоустройства Кыргызстана (Бишкек). 
-            Твоя цель - помогать гражданам знать свои права и обязанности.
-            Язык: ${lang === 'ky' ? 'Кыргызский' : 'Русский'}.
-            Отвечай кратко, по делу, ссылаясь на "Кодекс о правонарушениях" или "Правила благоустройства", если уместно.`;
-            
-            const contents = [
-                { role: "user", parts: [{ text: systemPrompt + "\n\nИстория чата:\n" + history.map(m => `${m.role}: ${m.text}`).join("\n") + "\n\nВопрос пользователя: " + message }] }
-            ];
-
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents })
-                }
-            );
-            return (await response.json()).candidates[0].content.parts[0].text;
-        };
-
-        // --- Components ---
-        const Icon = ({ name, size = 24, className = "" }) => {
-            const icons = {
-                MapPin: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 6-9 13-9 13s-9-7-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>,
-                Camera: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
-                Upload: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
-                CheckCircle: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
-                AlertTriangle: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>,
-                Trash2: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
-                Lightbulb: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>,
-                Hammer: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25V2.4a2 2 0 0 0-2-2h-3c-.6 0-1.1.2-1.5.6L4 9.25c-.6.6-.92 1.4-.92 2.25v5.7c0 .8.3 1.6.9 2.2l1.2 1.2"/></svg>,
-                User: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-                ArrowRight: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
-                Sparkles: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></svg>,
-                ScrollText: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></svg>,
-                Volume2: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>,
-                Copy: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>,
-                X: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
-                Globe: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
-                Crosshair: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>,
-                Shield: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>,
-                TrendingUp: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
-                Briefcase: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>,
-                Lock: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
-                LogOut: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
-                MessageCircle: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>,
-                Send: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>,
-                Coins: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>,
-                Wrench: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>,
-                BarChart: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
-            };
-            return icons[name] || icons.AlertTriangle;
-        };
-
-        const ReportCard = ({ report, isAdmin, T, onUpdateStatus }) => (
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4">
-                <div className="flex justify-between items-start">
-                    <div className="flex gap-3 w-full">
-                        <div className={`w-10 h-10 min-w-[2.5rem] rounded-full flex items-center justify-center ${report.status === 'Решено' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                            <Icon name={report.icon || 'AlertTriangle'} size={20} />
-                        </div>
-                        <div className="w-full">
-                            <div className="flex justify-between items-start">
-                                <h3 className="font-semibold text-gray-800 leading-tight">{report.type}</h3>
-                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap ${
-                                    report.status === 'Решено' ? 'bg-green-100 text-green-700' : 
-                                    report.status === 'В работе' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-50 text-blue-600'
-                                }`}>
-                                    {report.status}
-                                </span>
-                            </div>
-                            
-                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{report.description}</p>
-                            
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                <span className="inline-flex items-center text-[10px] text-gray-500">
-                                    <Icon name="MapPin" size={10} className="mr-1" /> 
-                                    {report.manualAddress ? report.manualAddress : (report.location ? `${report.location.lat.toFixed(4)}, ${report.location.lng.toFixed(4)}` : "Локация скрыта")}
-                                </span>
-                                {report.fio && (
-                                     <span className="inline-flex items-center text-[10px] text-gray-500">
-                                        <Icon name="User" size={10} className="mr-1" /> {report.fio}
-                                    </span>
-                                )}
-                            </div>
-                            
-                            {/* NEW: Solution Block in Report Card */}
-                            {report.solution && (
-                                <div className="mt-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                                    <div className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1 mb-1">
-                                        <Icon name="Wrench" size={10} /> {T.solution_title}
-                                    </div>
-                                    <div className="text-xs text-gray-700 italic">{report.solution}</div>
-                                </div>
-                            )}
-
-                            {isAdmin && (
-                                <div className="mt-3 pt-3 border-t border-gray-100">
-                                    <p className="text-[10px] font-bold text-gray-400 mb-2 uppercase">{T.change_status}</p>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => onUpdateStatus(report.id, 'В работе')}
-                                            className="flex-1 py-1.5 bg-yellow-50 text-yellow-700 text-xs font-bold rounded-lg hover:bg-yellow-100 transition"
-                                        >
-                                            {T.status_work}
-                                        </button>
-                                        <button 
-                                            onClick={() => onUpdateStatus(report.id, 'Решено')}
-                                            className="flex-1 py-1.5 bg-green-50 text-green-700 text-xs font-bold rounded-lg hover:bg-green-100 transition"
-                                        >
-                                            {T.status_done}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-
-        const Modal = ({ isOpen, onClose, title, children }) => {
-            if (!isOpen) return null;
+            if (!iconNode) return <span className="w-5 h-5 inline-block bg-gray-200 rounded-full"></span>;
             return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh]">
-                        <div className="p-4 border-b flex justify-between items-center">
-                            <h3 className="font-bold text-lg flex items-center gap-2"><Icon name="Sparkles" className="text-blue-600" size={18}/> {title}</h3>
-                            <button onClick={onClose}><Icon name="X" size={20} className="text-gray-500" /></button>
-                        </div>
-                        <div className="p-4 overflow-y-auto flex-1">{children}</div>
-                    </div>
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {iconNode.map(([tag, attrs], i) => React.createElement(tag, { ...attrs, key: i }))}
+                </svg>
             );
         };
-        
-        const ChatBubble = ({ msg }) => (
-            <div className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
-                <div className={`chat-bubble ${msg.role === 'user' ? 'chat-user' : 'chat-ai'}`}>
-                    {msg.text}
-                </div>
-            </div>
-        );
 
+        // --- ГЛАВНОЕ ПРИЛОЖЕНИЕ ---
         const App = () => {
-            const [user, setUser] = useState(null);
-            const [lang, setLang] = useState(null);
             const [view, setView] = useState('lang_select');
-            const [reports, setReports] = useState([]);
-            const [isAdmin, setIsAdmin] = useState(false);
+            const [lang, setLang] = useState('ru');
+            const [reports, setReports] = useState([]); 
             
-            // Form Data
+            // Данные новой заявки
             const [selectedFile, setSelectedFile] = useState(null);
             const [previewUrl, setPreviewUrl] = useState(null);
             const [aiAnalysis, setAiAnalysis] = useState(null);
-            const [analysisStep, setAnalysisStep] = useState(0);
+            
+            // Поля ввода
             const [fio, setFio] = useState('');
             const [manualAddress, setManualAddress] = useState('');
-            const [geoLoading, setGeoLoading] = useState(false);
             const [location, setLocation] = useState(null);
-            const [isSubmitting, setIsSubmitting] = useState(false);
-
-            // Login Data
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-
-            // LLM States
-            const [legalText, setLegalText] = useState(null);
-            const [showLegalModal, setShowLegalModal] = useState(false);
-            const [isGeneratingLegal, setIsGeneratingLegal] = useState(false);
-            const [audioUrl, setAudioUrl] = useState(null);
-            const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
             
-            // Cost Modal
-            const [costData, setCostData] = useState(null);
-            const [showCostModal, setShowCostModal] = useState(false);
-            const [isEstimatingCost, setIsEstimatingCost] = useState(false);
-            
-            // Chat
+            // Чат
             const [showChat, setShowChat] = useState(false);
-            const [chatMessages, setChatMessages] = useState([]);
+            const [chatMsg, setChatMsg] = useState([]);
             const [chatInput, setChatInput] = useState('');
-            const [isChatLoading, setIsChatLoading] = useState(false);
-            const chatEndRef = useRef(null);
+            const [chatLoading, setChatLoading] = useState(false);
 
-            // Analytics
-            const [analyticsData, setAnalyticsData] = useState(null);
-            const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
-            const [isGeneratingAnalytics, setIsGeneratingAnalytics] = useState(false);
-            
-            // --- Dynamic Manifest Generation (Для Android установки) ---
+            const T = translations[lang];
+
             useEffect(() => {
-                const manifest = {
-                    "name": "FixMap AI",
-                    "short_name": "FixMap",
-                    "start_url": ".",
-                    "display": "standalone",
-                    "background_color": "#ffffff",
-                    "theme_color": "#2563eb",
-                    "icons": [
-                        {
-                            "src": "https://img.icons8.com/fluency/192/maintenance.png",
-                            "sizes": "192x192",
-                            "type": "image/png"
-                        },
-                        {
-                            "src": "https://img.icons8.com/fluency/512/maintenance.png",
-                            "sizes": "512x512",
-                            "type": "image/png"
-                        }
-                    ]
-                };
-                const stringManifest = JSON.stringify(manifest);
-                const blob = new Blob([stringManifest], {type: 'application/json'});
-                const manifestURL = URL.createObjectURL(blob);
-                const link = document.createElement('link');
-                link.rel = 'manifest';
-                link.href = manifestURL;
-                document.head.appendChild(link);
+                const loader = document.getElementById('app-loader');
+                if(loader) loader.style.display = 'none';
+                
+                if (isFirebaseAvailable && auth) {
+                    auth.signInAnonymously().catch(e => console.warn("Auth failed, working offline", e));
+                }
             }, []);
 
-            const T = translations[lang || 'ru'];
-
+            // Загрузка ленты
             useEffect(() => {
-                const initAuth = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await auth.signInWithCustomToken(__initial_auth_token);
-                    } else {
-                        await auth.signInAnonymously();
-                    }
-                };
-                initAuth();
-                return auth.onAuthStateChanged(setUser);
+                if (isFirebaseAvailable && db) {
+                     const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').orderBy('createdAt', 'desc').limit(20);
+                     const timer = setTimeout(() => { if(reports.length === 0) console.log("Firestore slow..."); }, 3000);
+                     const unsub = q.onSnapshot(
+                        s => { clearTimeout(timer); setReports(s.docs.map(d => ({id: d.id, ...d.data()}))); }, 
+                        err => { clearTimeout(timer); console.log("Firestore error, using local state.", err); }
+                    );
+                     return () => { clearTimeout(timer); unsub(); };
+                }
             }, []);
 
-            useEffect(() => {
-                if (!user) return;
-                const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').orderBy('createdAt', 'desc').limit(50);
-                const unsubscribe = q.onSnapshot(s => setReports(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-                return () => unsubscribe();
-            }, [user]);
-            
-            useEffect(() => {
-                if (chatEndRef.current) {
-                    chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-                }
-            }, [chatMessages, showChat]);
-
-            // Handlers
-            const selectLanguage = (l) => {
-                setLang(l);
-                setView('home');
-                setChatMessages([{
-                    role: 'ai',
-                    text: l === 'ky' ? "Саламатсызбы! Мен шаардык кеңешчимин. Мыйзамдар же айып пулдар жөнүндө суроолоруңуз барбы?" : "Здравствуйте! Я городской советник. Есть вопросы по законам или штрафам?"
-                }]);
-            };
-
-            const handleAdminLogin = (e) => {
-                e.preventDefault();
-                if (email && password) {
-                    setIsAdmin(true);
-                    setView('admin_dashboard');
-                    setEmail('');
-                    setPassword('');
-                } else {
-                    alert("Введите email и пароль");
-                }
-            };
-
-            const updateReportStatus = async (reportId, newStatus) => {
-                try {
-                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').doc(reportId).update({
-                        status: newStatus
-                    });
-                } catch (error) {
-                    console.error("Error updating status:", error);
-                    alert("Ошибка обновления статуса");
-                }
-            };
-
-            const handleFileSelect = (e) => {
+            const handleFileSelect = async (e) => {
                 if (e.target.files?.[0]) {
                     const file = e.target.files[0];
                     setSelectedFile(file);
                     setPreviewUrl(URL.createObjectURL(file));
                     setView('analyzing');
-                    startAnalysis(file);
-                }
-            };
-
-            const startAnalysis = async (file) => {
-                setAnalysisStep(1);
-                const t2 = setTimeout(() => setAnalysisStep(2), 1500);
-                const t3 = setTimeout(() => setAnalysisStep(3), 3000);
-                try {
+                    
+                    await new Promise(r => setTimeout(r, 1000)); // Косметика
                     const result = await analyzeImageWithGemini(file, lang);
-                    clearTimeout(t2); clearTimeout(t3);
                     setAiAnalysis(result);
-                    setCostData(null);
                     setView('result');
-                    setAnalysisStep(0);
-                } catch (e) {
-                    setAnalysisStep(0);
-                    setView('upload');
-                    alert("Ошибка/Ката: " + e.message);
                 }
             };
 
             const getLocation = () => {
-                setGeoLoading(true);
-                if (navigator.geolocation) {
+                if(navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                            setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                            setGeoLoading(false);
-                        },
-                        (err) => {
-                            alert(T.geo_error);
-                            setGeoLoading(false);
-                        }
+                        (pos) => setLocation({lat: pos.coords.latitude, lng: pos.coords.longitude}),
+                        () => alert("GPS недоступен")
                     );
                 } else {
-                    alert("GPS not supported");
-                    setGeoLoading(false);
+                    alert("GPS не поддерживается");
                 }
-            };
+            }
 
             const submitReport = async () => {
-                if (!fio.trim()) { alert(T.error_fio); return; }
-                if (!location && !manualAddress.trim()) { alert(T.error_geo); return; }
-                
-                setIsSubmitting(true);
                 const newReport = {
                     ...aiAnalysis,
-                    fio,
-                    manualAddress,
-                    location,
+                    fio: fio || "Аноним",
+                    address: manualAddress || "Не указан",
+                    createdAt: new Date(),
                     status: 'Новая',
-                    userId: user.uid,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    lang
+                    id: Date.now().toString()
                 };
-
-                try {
-                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport);
-                    setSelectedFile(null); setPreviewUrl(null); setAiAnalysis(null); setLocation(null); setManualAddress('');
-                    setView('home');
-                } catch (err) {
-                    console.error(err);
+                
+                // Оффлайн сохранение (мгновенно)
+                setReports([newReport, ...reports]);
+                
+                // Попытка облачного сохранения
+                if (isFirebaseAvailable && db) {
+                    try {
+                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({
+                            ...newReport,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    } catch(e) { console.warn("Cloud save failed."); }
                 }
-                setIsSubmitting(false);
+                
+                // Сброс
+                setFio(''); setManualAddress(''); setLocation(null);
+                setView('home');
             };
 
-            const handleLegal = async () => {
-                if (legalText) { setShowLegalModal(true); return; }
-                setIsGeneratingLegal(true);
-                try {
-                    const txt = await generateLegalComplaint({...aiAnalysis, fio, location, manualAddress}, lang);
-                    setLegalText(txt);
-                    setShowLegalModal(true);
-                } catch(e) {}
-                setIsGeneratingLegal(false);
-            };
-
-            const handleAudio = async () => {
-                if (audioUrl) { new Audio(audioUrl).play(); return; }
-                setIsGeneratingAudio(true);
-                try {
-                    const url = await generateAudioReport(`${aiAnalysis.description}. ${aiAnalysis.safety_tips}`);
-                    setAudioUrl(url);
-                    new Audio(url).play();
-                } catch(e) {}
-                setIsGeneratingAudio(false);
-            };
-            
-            const handleCostEstimate = async () => {
-                if (costData) { setShowCostModal(true); return; }
-                setIsEstimatingCost(true);
-                try {
-                    const data = await estimateRepairCost(aiAnalysis, lang);
-                    setCostData(data);
-                    setShowCostModal(true);
-                } catch(e) {
-                    alert("Не удалось рассчитать стоимость.");
-                }
-                setIsEstimatingCost(false);
-            };
-            
-            const handleChatSend = async (e) => {
+            const sendChat = async (e) => {
                 e.preventDefault();
-                if (!chatInput.trim()) return;
-                
-                const userMsg = { role: 'user', text: chatInput };
-                setChatMessages(prev => [...prev, userMsg]);
+                if(!chatInput.trim()) return;
+                const userText = chatInput;
+                setChatMsg(prev => [...prev, {role: 'user', text: userText}]);
                 setChatInput('');
-                setIsChatLoading(true);
+                setChatLoading(true);
                 
                 try {
-                    const reply = await chatWithGemini(chatMessages, userMsg.text, lang);
-                    setChatMessages(prev => [...prev, { role: 'ai', text: reply }]);
-                } catch(err) {
-                    setChatMessages(prev => [...prev, { role: 'ai', text: "Ошибка связи с сервером." }]);
+                    const data = await callGemini({ contents: [{ parts: [{ text: `Вопрос по ЖКХ КР: ${userText}` }] }] });
+                    const reply = data.candidates[0].content.parts[0].text;
+                    setChatMsg(prev => [...prev, {role: 'user', text: userText}, {role: 'ai', text: reply}]);
+                } catch(e) {
+                    setChatMsg(prev => [...prev, {role: 'ai', text: "Ошибка связи с ИИ."}]);
                 }
-                setIsChatLoading(false);
+                setChatLoading(false);
             };
 
-            const handleAdminAnalytics = async () => {
-                if (analyticsData) { setShowAnalyticsModal(true); return; }
-                setIsGeneratingAnalytics(true);
-                try {
-                    const result = await generateAdminAnalytics(reports, lang);
-                    setAnalyticsData(result);
-                    setShowAnalyticsModal(true);
-                } catch(err) {
-                    alert("Ошибка генерации отчета");
-                }
-                setIsGeneratingAnalytics(false);
-            };
-
-            // --- Views ---
-
-            const renderLangSelect = () => (
-                <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 p-6 text-white relative">
-                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-2xl w-full max-w-xs text-center">
-                        <Icon name="Globe" size={48} className="mx-auto mb-4 text-blue-200" />
-                        <h1 className="text-2xl font-bold mb-2">FixMap</h1>
-                        <p className="text-blue-100 mb-8">Выберите язык / Тилди тандаңыз</p>
-                        <div className="space-y-3 mb-6">
-                            <button onClick={() => selectLanguage('ky')} className="w-full bg-white text-blue-800 font-bold py-3 rounded-xl hover:bg-blue-50 transition">
-                                Кыргызча 🇰🇬
-                            </button>
-                            <button onClick={() => selectLanguage('ru')} className="w-full bg-blue-500/50 border border-white/30 text-white font-bold py-3 rounded-xl hover:bg-blue-500/70 transition">
-                                Русский 🇷🇺
-                            </button>
+            // ЭКРАНЫ
+            if (view === 'lang_select') {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 p-6 text-white text-center">
+                        <div className="bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/20 shadow-2xl w-full max-w-sm">
+                            <Icon name="globe" size={48} className="mx-auto mb-4 text-blue-200" />
+                            <h1 className="text-3xl font-bold mb-8">FixMap AI</h1>
+                            <button onClick={() => {setLang('ky'); setView('home');}} className="w-full bg-white text-blue-800 font-bold py-4 rounded-xl mb-3 hover:bg-blue-50 transition">Кыргызча 🇰🇬</button>
+                            <button onClick={() => {setLang('ru'); setView('home');}} className="w-full bg-blue-500/50 border border-white/30 text-white font-bold py-4 rounded-xl hover:bg-blue-500/70 transition">Русский 🇷🇺</button>
                         </div>
-                        <button 
-                            onClick={() => { setLang('ru'); setView('admin_login'); }}
-                            className="text-xs text-blue-200 hover:text-white flex items-center justify-center gap-1 w-full pt-4 border-t border-white/10"
-                        >
-                            <Icon name="Briefcase" size={12} />
-                            {translations.ru.admin_login_link} / {translations.ky.admin_login_link}
-                        </button>
                     </div>
-                </div>
-            );
+                );
+            }
 
-            const renderAdminLogin = () => (
-                <div className="min-h-screen flex flex-col bg-white">
-                    <div className="p-6">
-                        <button onClick={() => setView('lang_select')} className="p-2 -ml-2 rounded-full hover:bg-gray-100 w-fit text-gray-600">
-                            <Icon name="ArrowRight" className="rotate-180" />
-                        </button>
-                        <h2 className="text-2xl font-bold mt-4 text-gray-800">{T.admin_login_title}</h2>
+            if (view === 'analyzing') {
+                return (
+                    <div className="h-screen bg-gray-900 flex flex-col items-center justify-center relative overflow-hidden">
+                         {previewUrl && <img src={previewUrl} className="absolute inset-0 w-full h-full object-cover opacity-40 blur-sm" />}
+                         <div className="scan-line"></div>
+                         <div className="relative z-10 text-center">
+                             <div className="w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+                             <p className="text-white font-bold text-xl">{T.analyzing}</p>
+                         </div>
                     </div>
-                    <div className="flex-1 p-6 flex flex-col justify-center max-w-sm mx-auto w-full">
-                        <div className="bg-blue-50 p-4 rounded-2xl mb-8 flex flex-col items-center text-center">
-                            <div className="bg-blue-100 p-3 rounded-full text-blue-600 mb-3"><Icon name="Shield" size={32} /></div>
-                            <p className="text-sm text-blue-800 font-medium">Доступ только для авторизованных сотрудников</p>
+                );
+            }
+
+            if (view === 'result' && aiAnalysis) {
+                return (
+                    <div className="min-h-screen bg-gray-50 pb-8 flex flex-col">
+                        <div className="relative h-64 shrink-0 bg-gray-900">
+                            <img src={previewUrl} className="w-full h-full object-cover opacity-90" />
+                            <button onClick={() => setView('home')} className="absolute top-4 left-4 bg-black/40 p-2 rounded-full text-white backdrop-blur-md"><Icon name="arrow-left"/></button>
+                            <div className="absolute bottom-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent">
+                                <span className="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded mb-2 inline-block">{T.result_title}</span>
+                                <h2 className="text-2xl font-bold text-white">{aiAnalysis.type}</h2>
+                            </div>
                         </div>
                         
-                        <form onSubmit={handleAdminLogin} className="space-y-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Email</label>
-                                <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                                    <Icon name="User" className="text-gray-400" size={20} />
-                                    <input 
-                                        type="email" 
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        placeholder={T.email_placeholder}
-                                        className="w-full bg-transparent p-3 outline-none text-sm text-gray-800"
-                                        required
-                                    />
+                        <div className="flex-1 p-6 -mt-6 bg-gray-50 rounded-t-3xl relative z-10 space-y-4">
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-blue-50 p-3 rounded-xl"><div className="text-xs text-gray-500">{T.category}</div><div className="font-bold text-sm">{aiAnalysis.category}</div></div>
+                                    <div className="bg-red-50 p-3 rounded-xl"><div className="text-xs text-gray-500">{T.severity}</div><div className="font-bold text-sm">{aiAnalysis.severity}</div></div>
                                 </div>
+                                <div className="mb-3"><div className="text-xs text-gray-400 font-bold uppercase">{T.desc_title}</div><p className="text-sm text-gray-700">{aiAnalysis.description}</p></div>
                             </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">{T.pass_placeholder}</label>
-                                <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 px-3 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                                    <Icon name="Lock" className="text-gray-400" size={20} />
-                                    <input 
-                                        type="password" 
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                        className="w-full bg-transparent p-3 outline-none text-sm text-gray-800"
-                                        required
-                                    />
+                            
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">{T.fio_label}</label>
+                                    <div className="flex items-center bg-gray-50 rounded-xl border px-3 py-1">
+                                        <Icon name="user" className="text-gray-400 mr-2" />
+                                        <input 
+                                            type="text" 
+                                            className="w-full bg-transparent p-2 outline-none text-sm" 
+                                            placeholder={T.fio_placeholder}
+                                            value={fio}
+                                            onChange={(e) => setFio(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">{T.address_label}</label>
+                                    <div className="flex items-center bg-gray-50 rounded-xl border px-3 py-1">
+                                        <Icon name="map-pin" className="text-gray-400 mr-2" />
+                                        <input 
+                                            type="text" 
+                                            className="w-full bg-transparent p-2 outline-none text-sm" 
+                                            placeholder={T.address_placeholder}
+                                            value={manualAddress}
+                                            onChange={(e) => setManualAddress(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <button onClick={getLocation} className={`w-full py-2 rounded-xl border text-sm font-bold flex items-center justify-center gap-2 ${location ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-600'}`}>
+                                    <Icon name={location ? "check-circle" : "crosshair"} size={16}/> {location ? T.geo_ok : T.geo_btn}
+                                </button>
                             </div>
-                            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all mt-4">
-                                {T.login_btn}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            );
 
-            const renderAdminDashboard = () => (
-                <div className="min-h-screen bg-gray-50 pb-20">
-                     <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-20 shadow-sm">
-                        <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <div className="bg-blue-600 text-white p-1.5 rounded-lg"><Icon name="Shield" size={18} /></div>
-                                <h2 className="font-bold text-gray-800">{T.admin_dash_title}</h2>
-                            </div>
-                            <button onClick={() => { setIsAdmin(false); setView('lang_select'); }} className="text-xs font-medium text-red-500 flex items-center gap-1 bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100">
-                                <Icon name="LogOut" size={14} /> {T.logout}
-                            </button>
+                            <button onClick={submitReport} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition">{T.submit_btn}</button>
                         </div>
                     </div>
-                    
-                    {/* Analytics Button */}
-                     <div className="p-4 pb-0">
-                        <button 
-                            onClick={handleAdminAnalytics}
-                            disabled={isGeneratingAnalytics}
-                            className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2 hover:bg-indigo-700 transition active:scale-95"
-                        >
-                             {isGeneratingAnalytics ? <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> : <><Icon name="BarChart" size={20} /> {T.admin_analytics_btn}</>}
-                        </button>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-24 relative">
+                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-b-[2.5rem] shadow-xl relative z-10">
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-2 font-bold text-xl"><span className="bg-white/20 p-1 rounded"><Icon name="sparkles" size={16}/></span> FixMap</div>
+                            <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 px-3 py-1 rounded-full">{lang.toUpperCase()}</button>
+                        </div>
+                        <h1 className="text-3xl font-extrabold mb-2">{T.app_subtitle}</h1>
+                        {!isFirebaseAvailable && <p className="text-xs text-yellow-200 bg-yellow-900/30 p-2 rounded inline-block">{T.demo_warning}</p>}
+                        
+                        <div className="mt-6 flex gap-3">
+                             <label className="flex-1 bg-white text-blue-700 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition">
+                                <Icon name="camera"/> {T.take_photo}
+                                <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                            </label>
+                        </div>
                     </div>
 
-                    <div className="p-4">
+                    <div className="p-4 pt-6">
+                        <h2 className="font-bold text-gray-800 mb-4 px-2">{T.feed_title}</h2>
                         {reports.length === 0 ? (
-                             <div className="text-center text-gray-400 py-20">Нет активных заявок</div>
+                            <div className="text-center text-gray-400 py-10 flex flex-col items-center">
+                                <Icon name="inbox" size={48} className="mb-2 opacity-50"/>
+                                <p>{T.no_reports}</p>
+                            </div>
                         ) : (
                             reports.map(r => (
-                                <ReportCard 
-                                    key={r.id} 
-                                    report={r} 
-                                    isAdmin={true} 
-                                    T={T}
-                                    onUpdateStatus={updateReportStatus} 
-                                />
+                                <div key={r.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 flex gap-3">
+                                    <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 shrink-0">
+                                        <Icon name={r.icon || "alert-circle"} size={20}/>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between">
+                                            <h3 className="font-bold text-gray-800 text-sm">{r.type}</h3>
+                                            <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500 h-fit">{r.category}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 line-clamp-2 mt-1">{r.description}</p>
+                                        <div className="mt-2 flex items-center text-[10px] text-gray-400 gap-2">
+                                            {r.fio && <span className="flex items-center gap-1"><Icon name="user" size={10}/> {r.fio}</span>}
+                                        </div>
+                                    </div>
+                                </div>
                             ))
                         )}
                     </div>
-                </div>
-            );
 
-            const renderHome = () => (
-                <div className="pb-20 bg-gray-50 min-h-screen">
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-b-[2.5rem] shadow-xl relative overflow-hidden z-10">
-                         <div className="flex justify-between items-center mb-6 relative z-10">
-                            <div className="flex items-center gap-2 font-bold text-xl">
-                                <div className="bg-white/10 p-2 rounded-xl"><Icon name="Sparkles" size={20} className="text-yellow-300" /></div>
-                                FixMap
-                            </div>
-                            <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 px-3 py-1 rounded-full">{lang === 'ky' ? 'KG' : 'RU'}</button>
-                        </div>
-                        <h1 className="text-3xl font-extrabold mb-3 leading-tight">{T.app_subtitle}</h1>
-                        <p className="text-blue-100 text-sm mb-6 max-w-[85%]">{T.ai_powered}</p>
-                        <button onClick={() => setView('upload')} className="w-full bg-white text-blue-700 font-bold py-4 px-6 rounded-2xl shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all">
-                            <Icon name="Camera" size={22} /> {T.report_btn}
-                        </button>
-                    </div>
-                    <div className="p-4 -mt-2 relative z-0">
-                        <div className="flex justify-between mb-4 px-1">
-                            <h2 className="font-bold text-gray-800">{T.feed_title}</h2>
-                            <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">{T.live}</span>
-                        </div>
-                        {reports.length === 0 ? <div className="text-center text-gray-400 py-10">{T.no_reports}</div> : reports.map(r => <ReportCard key={r.id} report={r} isAdmin={false} T={T} />)}
-                    </div>
-                </div>
-            );
+                    <button onClick={() => setShowChat(!showChat)} className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:bg-blue-700 transition z-50">
+                        <Icon name="message-circle" size={28}/>
+                    </button>
 
-            const renderUpload = () => (
-                <div className="h-screen flex flex-col bg-white">
-                    <div className="p-4 flex items-center border-b border-gray-100">
-                        <button onClick={() => setView('home')} className="p-2 rounded-full hover:bg-gray-100 mr-2"><Icon name="ArrowRight" className="rotate-180" /></button>
-                        <h2 className="font-bold text-lg">{T.upload_title}</h2>
-                    </div>
-                    <div className="flex-1 flex flex-col items-center justify-center p-6">
-                        <label className="w-full h-80 border-2 border-dashed border-blue-300 rounded-2xl flex flex-col items-center justify-center bg-blue-50/50 text-blue-600 cursor-pointer relative">
-                            <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
-                            <div className="bg-white p-6 rounded-full shadow-lg mb-4"><Icon name="Camera" size={40} /></div>
-                            <span className="font-bold text-lg">{T.take_photo}</span>
-                            <span className="text-sm text-blue-400">{T.gallery_hint}</span>
-                        </label>
-                    </div>
-                </div>
-            );
-
-            const renderAnalyzing = () => (
-                <div className="h-screen bg-gray-900 flex flex-col relative overflow-hidden justify-center items-center">
-                    {previewUrl && <img src={previewUrl} className="absolute inset-0 w-full h-full object-cover opacity-40 scale-105 blur-sm" />}
-                    <div className="scan-line bg-gradient-to-r from-transparent via-blue-400 to-transparent h-[2px] shadow-[0_0_15px_rgba(59,130,246,0.8)]"></div>
-                    <div className="relative w-64 h-64">
-                        <div className="absolute inset-0 border-2 border-blue-500/30 rounded-2xl animate-pulse"></div>
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"><div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-400 rounded-full animate-spin"></div></div>
-                    </div>
-                    <p className="relative z-10 text-white font-bold mt-8">{T.analyzing}</p>
-                </div>
-            );
-
-            const renderResult = () => (
-                <div className="h-screen flex flex-col bg-gray-50 overflow-y-auto">
-                    <div className="relative h-64 shrink-0 bg-gray-900">
-                        <img src={previewUrl} className="w-full h-full object-cover opacity-90" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-transparent to-transparent"></div>
-                        <button onClick={() => setView('upload')} className="absolute top-4 left-4 bg-black/30 p-2 rounded-full text-white backdrop-blur-md"><Icon name="ArrowRight" className="rotate-180" /></button>
-                        <div className="absolute bottom-0 left-0 w-full p-6">
-                            <div className="bg-green-500 w-max text-white text-[10px] font-bold px-2 py-0.5 rounded-md mb-2 flex items-center gap-1"><Icon name="Sparkles" size={10} /> {T.result_title}</div>
-                            <h2 className="text-2xl font-bold text-white leading-tight">{aiAnalysis.type}</h2>
-                        </div>
-                    </div>
-                    
-                    <div className="flex-1 px-6 py-6 -mt-4 bg-gray-50 rounded-t-3xl relative z-10">
-                        {/* AI Info */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-                            <div className="grid grid-cols-2 gap-3 mb-4">
-                                <div className="bg-blue-50 p-3 rounded-xl"><div className="text-xs text-gray-500">{T.category}</div><div className="font-bold text-gray-800">{aiAnalysis.category}</div></div>
-                                <div className="bg-red-50 p-3 rounded-xl"><div className="text-xs text-gray-500">{T.severity}</div><div className="font-bold text-gray-800">{aiAnalysis.severity}</div></div>
-                            </div>
-                            <div className="text-xs text-gray-400 font-bold mb-1 flex gap-1"><Icon name="Sparkles" size={12} className="text-yellow-500"/> {T.desc_title}</div>
-                            <p className="text-sm text-gray-700 italic mb-3">"{aiAnalysis.description}"</p>
-                            <div className="text-xs text-gray-400 font-bold mb-1">{T.dept}</div>
-                            <div className="font-medium text-gray-800">{aiAnalysis.dept}</div>
-                        </div>
-
-                        {/* Safety & Impact Section */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-                            <div className="flex gap-3 mb-4 border-b border-gray-100 pb-3">
-                                <div className="text-emerald-500 bg-emerald-50 p-2 rounded-lg h-fit"><Icon name="Shield" size={20} /></div>
-                                <div>
-                                    <div className="text-xs font-bold text-gray-400 uppercase">{T.safety_title}</div>
-                                    <div className="text-sm text-gray-800 leading-snug mt-1">{aiAnalysis.safety_tips}</div>
+                    {showChat && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-sm h-[500px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+                                <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                                    <h3 className="font-bold">{T.chat_title}</h3>
+                                    <button onClick={() => setShowChat(false)}><Icon name="x"/></button>
                                 </div>
-                            </div>
-                             <div className="flex gap-3 border-b border-gray-100 pb-3 mb-4">
-                                <div className="text-orange-500 bg-orange-50 p-2 rounded-lg h-fit"><Icon name="TrendingUp" size={20} /></div>
-                                <div>
-                                    <div className="text-xs font-bold text-gray-400 uppercase">{T.impact_title}</div>
-                                    <div className="text-sm text-gray-800 leading-snug mt-1">{aiAnalysis.consequences}</div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                    {chatMsg.length === 0 && <p className="text-center text-gray-400 text-sm mt-10">AI-ассистент готов!</p>}
+                                    {chatMsg.map((m, i) => (
+                                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`p-3 rounded-2xl max-w-[80%] text-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>{m.text}</div>
+                                        </div>
+                                    ))}
+                                    {chatLoading && <div className="text-xs text-gray-400 animate-pulse">Печатает...</div>}
                                 </div>
-                            </div>
-                             <div className="flex gap-3">
-                                <div className="text-blue-500 bg-blue-50 p-2 rounded-lg h-fit"><Icon name="Wrench" size={20} /></div>
-                                <div>
-                                    <div className="text-xs font-bold text-gray-400 uppercase">{T.solution_title}</div>
-                                    <div className="text-sm text-gray-800 leading-snug mt-1">{aiAnalysis.solution}</div>
-                                </div>
+                                <form onSubmit={sendChat} className="p-3 border-t flex gap-2">
+                                    <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={T.chat_placeholder} className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none"/>
+                                    <button type="submit" className="bg-blue-600 text-white p-2 rounded-full"><Icon name="send" size={18}/></button>
+                                </form>
                             </div>
                         </div>
-
-                        {/* User Inputs */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 space-y-4">
-                             <div>
-                                <label className="text-xs font-bold text-gray-500 mb-1 block">{T.fio_label}</label>
-                                <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 px-3">
-                                    <Icon name="User" className="text-gray-400" size={20} />
-                                    <input 
-                                        type="text" 
-                                        value={fio} 
-                                        onChange={e => setFio(e.target.value)} 
-                                        placeholder={T.fio_placeholder}
-                                        className="w-full bg-transparent p-3 outline-none text-sm text-gray-800"
-                                    />
-                                </div>
-                            </div>
-
-                             <div>
-                                <label className="text-xs font-bold text-gray-500 mb-1 block">{T.address_label}</label>
-                                <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 px-3">
-                                    <Icon name="MapPin" className="text-gray-400" size={20} />
-                                    <input 
-                                        type="text" 
-                                        value={manualAddress} 
-                                        onChange={e => setManualAddress(e.target.value)} 
-                                        placeholder={T.address_placeholder}
-                                        className="w-full bg-transparent p-3 outline-none text-sm text-gray-800"
-                                    />
-                                </div>
-                            </div>
-                            
-                            <button 
-                                onClick={getLocation} 
-                                className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${location ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-200 text-blue-600'}`}
-                            >
-                                {geoLoading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div> : <Icon name={location ? "CheckCircle" : "Crosshair"} size={20} />}
-                                <span>{location ? T.geo_ok : T.geo_btn}</span>
-                            </button>
-                        </div>
-
-                        {/* AI Actions */}
-                        <div className="mb-6 grid grid-cols-3 gap-2">
-                            <button onClick={handleLegal} disabled={isGeneratingLegal} className="bg-indigo-50 text-indigo-700 p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 h-20 justify-center text-center">
-                                {isGeneratingLegal ? <div className="animate-spin h-5 w-5 border-2 border-indigo-600 border-t-transparent rounded-full"></div> : <><Icon name="ScrollText" size={20}/> {T.legal_btn}</>}
-                            </button>
-                            <button onClick={handleCostEstimate} disabled={isEstimatingCost} className="bg-green-50 text-green-700 p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 h-20 justify-center text-center">
-                                {isEstimatingCost ? <div className="animate-spin h-5 w-5 border-2 border-green-600 border-t-transparent rounded-full"></div> : <><Icon name="Coins" size={20}/> {T.cost_btn}</>}
-                            </button>
-                            <button onClick={handleAudio} disabled={isGeneratingAudio} className="bg-orange-50 text-orange-700 p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 h-20 justify-center text-center">
-                                {isGeneratingAudio ? <div className="animate-spin h-5 w-5 border-2 border-orange-600 border-t-transparent rounded-full"></div> : <><Icon name="Volume2" size={20}/> {T.audio_btn}</>}
-                            </button>
-                        </div>
-
-                        <button onClick={submitReport} disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-70">
-                            {isSubmitting ? T.sending : T.submit_btn}
-                        </button>
-                    </div>
-                </div>
-            );
-
-            if (view === 'lang_select') return renderLangSelect();
-            if (view === 'admin_login') return renderAdminLogin();
-            if (view === 'admin_dashboard') return renderAdminDashboard();
-
-            return (
-                <div className="max-w-md mx-auto min-h-screen shadow-2xl bg-white relative overflow-hidden font-sans">
-                    {view === 'home' && renderHome()}
-                    {view === 'upload' && renderUpload()}
-                    {view === 'analyzing' && renderAnalyzing()}
-                    {view === 'result' && renderResult()}
-                    
-                    {/* Floating Chat Button */}
-                    {view === 'home' && (
-                        <button 
-                            onClick={() => setShowChat(true)}
-                            className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:scale-105 transition-transform z-40 flex items-center justify-center"
-                        >
-                            <Icon name="MessageCircle" size={28} />
-                        </button>
                     )}
-                    
-                    {/* Chat Modal */}
-                     <Modal isOpen={showChat} onClose={() => setShowChat(false)} title={T.chat_title}>
-                        <div className="flex flex-col h-96">
-                            <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-2">
-                                {chatMessages.map((msg, i) => <ChatBubble key={i} msg={msg} />)}
-                                <div ref={chatEndRef}></div>
-                            </div>
-                            <form onSubmit={handleChatSend} className="flex gap-2 items-center border-t pt-3">
-                                <input 
-                                    className="flex-1 bg-gray-50 border rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder={T.chat_placeholder}
-                                    value={chatInput}
-                                    onChange={e => setChatInput(e.target.value)}
-                                    disabled={isChatLoading}
-                                />
-                                <button 
-                                    type="submit" 
-                                    disabled={isChatLoading}
-                                    className="bg-blue-600 text-white p-2 rounded-full disabled:opacity-50"
-                                >
-                                    {isChatLoading ? <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div> : <Icon name="Send" size={20} />}
-                                </button>
-                            </form>
-                        </div>
-                    </Modal>
-                    
-                    {/* Cost Modal */}
-                    <Modal isOpen={showCostModal} onClose={() => setShowCostModal(false)} title={T.cost_modal_title}>
-                        {costData ? (
-                            <div className="space-y-4">
-                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                                    <div className="text-xs text-gray-500 uppercase mb-1">{T.cost_range}</div>
-                                    <div className="text-3xl font-bold text-green-700">{costData.min_price} - {costData.max_price} <span className="text-lg text-green-600">KGS</span></div>
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold text-gray-700 mb-2">{T.cost_breakdown}</div>
-                                    <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600 leading-relaxed border border-gray-200 whitespace-pre-line">
-                                        {costData.breakdown}
-                                    </div>
-                                </div>
-                            </div>
-                        ) : <div>Ошибка данных</div>}
-                    </Modal>
-
-                    {/* Legal Modal */}
-                    <Modal isOpen={showLegalModal} onClose={() => setShowLegalModal(false)} title={T.legal_modal_title}>
-                        <div className="bg-gray-50 p-2 rounded text-xs text-gray-500 mb-2">{T.legal_hint}</div>
-                        <textarea className="w-full h-64 p-3 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={legalText || ""} readOnly />
-                        <button onClick={() => { navigator.clipboard.writeText(legalText); alert(T.copied); }} className="w-full bg-blue-100 text-blue-700 font-bold py-3 rounded-xl mt-3 flex items-center justify-center gap-2">
-                            <Icon name="Copy" size={18} /> {T.copy_btn}
-                        </button>
-                    </Modal>
-                    
-                     {/* Analytics Modal */}
-                    <Modal isOpen={showAnalyticsModal} onClose={() => setShowAnalyticsModal(false)} title={T.analytics_modal_title}>
-                        {analyticsData ? (
-                           <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">
-                                {analyticsData}
-                           </div>
-                        ) : <div className="p-4 text-center text-gray-500">{T.analytics_loading}</div>}
-                    </Modal>
                 </div>
             );
         };
