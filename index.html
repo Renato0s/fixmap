@@ -11,9 +11,8 @@
     <meta name="theme-color" content="#2563eb">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <!-- Icons -->
-    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/96/maintenance.png">
-    <link rel="icon" type="image/png" href="https://img.icons8.com/fluency/96/maintenance.png">
+    <!-- Favicon (Generated SVG) -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E">
 
     <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -41,7 +40,8 @@
 </head>
 <body>
     <div id="app-loader">
-        <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <!-- Loader Logo (SVG) -->
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E" class="w-24 h-24 mb-6 shadow-xl rounded-[20px] animate-bounce"/>
         <h2 class="text-xl font-bold text-gray-800">FixMap Loading...</h2>
     </div>
 
@@ -50,7 +50,10 @@
     <script type="text/babel">
         // --- API & CONFIG ---
         
-        // GOOGLE API (Для анализа фото)
+        // 🔹 ВАШ ЛОГОТИП (Встроенный SVG)
+        const APP_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E";
+
+        // GOOGLE API
         const googleImageApiKey = "AIzaSyAena0EsktAw7VDA6NPTh4E7_BrULQKI4M"; 
         
         // Contractors
@@ -451,6 +454,7 @@
             if (view === 'lang_select') {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-blue-600 text-white p-6 relative overflow-hidden">
+                         <img src={APP_LOGO} className="w-32 h-32 mb-8 drop-shadow-2xl relative z-10 animate-bounce rounded-[24px] shadow-lg"/>
                          <h1 className="text-5xl font-extrabold mb-12 relative z-10 tracking-tight">FixMap</h1>
                          <div className="flex flex-col gap-4 w-full max-w-xs relative z-10">
                              <button onClick={() => selectLanguage('en')} className="bg-white text-blue-600 font-bold py-4 rounded-2xl shadow-lg hover:scale-105 transition flex items-center justify-center gap-3"><span className="text-2xl">🇬🇧</span> English</button>
@@ -463,10 +467,11 @@
             if (view === 'login') {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm relative">
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm relative flex flex-col items-center">
                             <button onClick={() => setView('home')} className="absolute top-4 right-4 text-gray-400"><Icon name="x"/></button>
+                            <img src={APP_LOGO} className="w-16 h-16 mb-4 rounded-xl"/>
                             <h2 className="text-xl font-bold mb-6 text-gray-800">{T.login_title}</h2>
-                            <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-4 space-y-1"><p><b>Roads:</b> road@bishkek.kg</p><p><b>Pass:</b> 123</p></div>
+                            <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-4 space-y-1 w-full"><p><b>Roads:</b> road@bishkek.kg</p><p><b>Pass:</b> 123</p></div>
                             <input value={email} onChange={e=>setEmail(e.target.value)} placeholder={T.email_ph} className="w-full border p-3 rounded-xl mb-3"/>
                             <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={T.pass_ph} className="w-full border p-3 rounded-xl mb-6"/>
                             <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg">{T.login_submit}</button>
@@ -630,7 +635,9 @@
                 <div className="min-h-screen bg-gray-50 pb-20 relative">
                     <div className="bg-blue-600 text-white p-6 rounded-b-[30px] shadow-xl">
                         <div className="flex justify-between items-center mb-6">
-                            <h1 className="text-2xl font-bold flex items-center gap-2"><Icon name="map"/> {T.app_name}</h1>
+                            <h1 className="text-2xl font-bold flex items-center gap-2">
+                                <img src={APP_LOGO} className="w-8 h-8 rounded-full bg-white"/> {T.app_name}
+                            </h1>
                             <div className="flex gap-2">
                                 <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 w-8 h-8 rounded-full flex items-center justify-center font-bold">{lang === 'en' ? 'EN' : 'RU'}</button>
                                 <button onClick={() => setView('login')} className="text-xs bg-white/20 px-3 py-1 rounded-full">{T.staff_login_btn}</button>
@@ -659,6 +666,7 @@
                                             <h3 className="font-bold text-sm">{r.type}</h3>
                                             <div className="flex gap-1">
                                                  <StatusBadge status={r.status}/>
+                                                 <ImportanceBadge importance={r.importance}/>
                                             </div>
                                         </div>
                                         <p className="text-xs text-gray-500 line-clamp-2">{r.description}</p>
