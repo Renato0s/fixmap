@@ -34,10 +34,6 @@
         @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
         #app-loader { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
         
-        /* Markdown styles for Chat response */
-        .prose p { margin-bottom: 0.5em; }
-        .prose ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.5em; }
-        
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -53,9 +49,10 @@
 
     <script type="text/babel">
         // --- API & CONFIG ---
-        // ВАЖНО: Оставляем пустым для использования системного ключа среды.
-        // Если деплоите на Vercel, вставьте свой ключ AIza...
-        const geminiApiKey = ""; 
+        
+        // GOOGLE API (Для анализа фото)
+        // Используется системный ключ или оставь пустым для демо
+        const googleImageApiKey = ""; 
         
         // Contractors
         const CONTRACTORS = [
@@ -116,13 +113,7 @@
                 status_new: "Назначена",
                 status_work: "В работе",
                 status_done: "Выполнено",
-                status_rejected: "Отклонена",
-                
-                // Chat
-                chat_title: "Советник (AI)",
-                chat_placeholder: "Задайте вопрос...",
-                chat_send: "Отправить",
-                chat_welcome: "Привет! Я ИИ-помощник FixMap. Спросите меня о городских службах или правилах."
+                status_rejected: "Отклонена"
             },
             en: {
                 app_name: "FixMap",
@@ -172,13 +163,7 @@
                 status_new: "Assigned",
                 status_work: "In Progress",
                 status_done: "Done",
-                status_rejected: "Rejected",
-
-                // Chat
-                chat_title: "City Advisor (AI)",
-                chat_placeholder: "Ask a question...",
-                chat_send: "Send",
-                chat_welcome: "Hi! I'm FixMap AI. Ask me about city services or regulations."
+                status_rejected: "Rejected"
             }
         };
 
@@ -211,49 +196,14 @@
             return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
-        // --- CHAT SERVICE (Google Gemini - Robust) ---
-        const callChatAI = async (userText, lang) => {
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
-                
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        systemInstruction: {
-                            parts: [{ text: "Act as a helpful city assistant for the FixMap app. Keep answers concise, polite, and helpful." }]
-                        },
-                        contents: [{
-                            parts: [{ 
-                                text: `User language: ${lang}. User says: ${userText}` 
-                            }]
-                        }]
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorDetails = await response.text();
-                    console.error("Gemini API Error details:", errorDetails);
-                    throw new Error(`Chat API Error: ${response.status} ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response content.";
-            } catch (e) {
-                console.error("Chat failed:", e);
-                return lang === 'ru' 
-                    ? "Извините, сервис сейчас недоступен (Ошибка ключа или сети)." 
-                    : "Sorry, service is currently unavailable (Key or Network Error).";
-            }
-        };
-
-        // --- GEMINI SERVICE (Image Analysis) ---
-        const callGemini = async (payload) => {
+        // --- IMAGE ANALYSIS SERVICE (GOOGLE GEMINI DIRECT) ---
+        const callGeminiImage = async (payload) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); 
 
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
+                // Если ключа нет, пытаемся использовать системный, если он доступен в окружении
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${googleImageApiKey}`;
                 const response = await fetch(url, { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
@@ -283,7 +233,7 @@
                 3. "description": Description in ${lang}.
                 Example JSON: { "category_id": "road", "type": "Pothole", "description": "Big hole" }`;
                 
-                const data = await callGemini({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: b64 } }] }] });
+                const data = await callGeminiImage({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: b64 } }] }] });
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (e) {
@@ -331,12 +281,6 @@
             // Auth Data
             const [email, setEmail] = React.useState('');
             const [pass, setPass] = React.useState('');
-
-            // Chat Data
-            const [showChat, setShowChat] = React.useState(false);
-            const [chatMessages, setChatMessages] = React.useState([]);
-            const [chatInput, setChatInput] = React.useState('');
-            const [chatLoading, setChatLoading] = React.useState(false);
 
             const T = TRANSLATIONS[lang];
 
@@ -430,22 +374,6 @@
                     setCurrentUser(contractor);
                     setView('dash');
                 } else alert(T.wrong_pass);
-            };
-
-            const handleChatSubmit = async (e) => {
-                e.preventDefault();
-                if (!chatInput.trim()) return;
-                
-                const userMsg = chatInput;
-                setChatMessages(prev => [...prev, {role: 'user', content: userMsg}]);
-                setChatInput('');
-                setChatLoading(true);
-
-                // Use new Google Gemini Chat function
-                const botResponse = await callChatAI(userMsg, lang);
-                
-                setChatMessages(prev => [...prev, {role: 'assistant', content: botResponse}]);
-                setChatLoading(false);
             };
 
             // --- VIEWS ---
@@ -588,38 +516,6 @@
                         ))}
                         {reports.length === 0 && <div className="text-center text-gray-400 py-10">{T.empty_feed}</div>}
                     </div>
-
-                    {/* Chat Button (Grok) */}
-                    <button onClick={() => setShowChat(!showChat)} className="fixed bottom-6 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-2xl hover:bg-indigo-700 transition z-50">
-                        <Icon name="message-square" size={28}/>
-                    </button>
-
-                    {/* Chat Window */}
-                    {showChat && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-sm h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-                                <div className="p-4 bg-indigo-600 text-white flex justify-between items-center">
-                                    <h3 className="font-bold flex items-center gap-2"><Icon name="bot" size={20}/> {T.chat_title}</h3>
-                                    <button onClick={() => setShowChat(false)}><Icon name="x"/></button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                                    {chatMessages.length === 0 && <div className="bg-white p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-gray-700">{T.chat_welcome}</div>}
-                                    {chatMessages.map((m, i) => (
-                                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`p-3 rounded-xl max-w-[85%] text-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm rounded-bl-none prose'}`}>
-                                                {m.content}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {chatLoading && <div className="flex justify-start"><div className="bg-gray-200 text-gray-500 text-xs px-3 py-2 rounded-full animate-pulse">Grok is typing...</div></div>}
-                                </div>
-                                <form onSubmit={handleChatSubmit} className="p-3 bg-white border-t flex gap-2">
-                                    <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={T.chat_placeholder} className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"/>
-                                    <button type="submit" disabled={chatLoading} className="bg-indigo-600 text-white p-2 rounded-full disabled:opacity-50"><Icon name="send" size={18}/></button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         };
