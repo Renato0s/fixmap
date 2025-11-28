@@ -51,8 +51,8 @@
         // --- API & CONFIG ---
         
         // GOOGLE API (Для анализа фото)
-        // Используется системный ключ или оставь пустым для демо
-        const googleImageApiKey = ""; 
+        // Обновлен: установлен ваш персональный платный ключ
+        const googleImageApiKey = "AIzaSyAena0EsktAw7VDA6NPTh4E7_BrULQKI4M"; 
         
         // Contractors
         const CONTRACTORS = [
@@ -202,8 +202,8 @@
             const timeoutId = setTimeout(() => controller.abort(), 10000); 
 
             try {
-                // Если ключа нет, пытаемся использовать системный, если он доступен в окружении
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${googleImageApiKey}`;
+                // Используем ваш ключ
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${googleImageApiKey}`;
                 const response = await fetch(url, { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
