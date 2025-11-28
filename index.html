@@ -34,7 +34,7 @@
         @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
         #app-loader { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
         
-        /* Markdown styles for Grok response */
+        /* Markdown styles for Chat response */
         .prose p { margin-bottom: 0.5em; }
         .prose ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.5em; }
         
@@ -53,13 +53,10 @@
 
     <script type="text/babel">
         // --- API & CONFIG ---
-        const geminiApiKey = "AIzaSyDrl0AOqQ0amog0WhH2MS9cv1ueLC-b2gk"; 
+        // ВАЖНО: Оставляем пустым для использования системного ключа среды.
+        // Если деплоите на Vercel, вставьте свой ключ AIza...
+        const geminiApiKey = ""; 
         
-        // Grok / OpenRouter Config
-        const grokApiKey = "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";
-        const grokBaseUrl = "https://openrouter.ai/api/v1";
-        const grokModel = "google/gemini-2.0-flash-lite-preview-02-05:free"; // Using a reliable free model on OpenRouter as requested or fallback
-
         // Contractors
         const CONTRACTORS = [
             { id: 'c1', email: 'road@bishkek.kg', name: 'БишкекАсфальтСервис', type: 'road' },
@@ -122,7 +119,7 @@
                 status_rejected: "Отклонена",
                 
                 // Chat
-                chat_title: "Советник (Grok AI)",
+                chat_title: "Советник (AI)",
                 chat_placeholder: "Задайте вопрос...",
                 chat_send: "Отправить",
                 chat_welcome: "Привет! Я ИИ-помощник FixMap. Спросите меня о городских службах или правилах."
@@ -178,7 +175,7 @@
                 status_rejected: "Rejected",
 
                 // Chat
-                chat_title: "City Advisor (Grok AI)",
+                chat_title: "City Advisor (AI)",
                 chat_placeholder: "Ask a question...",
                 chat_send: "Send",
                 chat_welcome: "Hi! I'm FixMap AI. Ask me about city services or regulations."
@@ -214,35 +211,39 @@
             return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
-        // --- GROK SERVICE (New) ---
-        const callGrok = async (userText) => {
+        // --- CHAT SERVICE (Google Gemini - Robust) ---
+        const callChatAI = async (userText, lang) => {
             try {
-                const response = await fetch(`${grokBaseUrl}/chat/completions`, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${grokApiKey}`,
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": window.location.href, // Required by OpenRouter
-                        "X-Title": "FixMap" // Optional
-                    },
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        "model": grokModel,
-                        "messages": [
-                          {"role": "system", "content": "You are a helpful city assistant for the FixMap app. Keep answers concise and helpful."},
-                          {"role": "user", "content": userText}
-                        ]
+                        systemInstruction: {
+                            parts: [{ text: "Act as a helpful city assistant for the FixMap app. Keep answers concise, polite, and helpful." }]
+                        },
+                        contents: [{
+                            parts: [{ 
+                                text: `User language: ${lang}. User says: ${userText}` 
+                            }]
+                        }]
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Grok API Error: ${response.status}`);
+                    const errorDetails = await response.text();
+                    console.error("Gemini API Error details:", errorDetails);
+                    throw new Error(`Chat API Error: ${response.status} ${response.statusText}`);
                 }
 
                 const data = await response.json();
-                return data.choices[0].message.content;
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response content.";
             } catch (e) {
-                console.error("Grok failed:", e);
-                return "Извините, сервис ИИ сейчас недоступен. (Error calling OpenRouter)";
+                console.error("Chat failed:", e);
+                return lang === 'ru' 
+                    ? "Извините, сервис сейчас недоступен (Ошибка ключа или сети)." 
+                    : "Sorry, service is currently unavailable (Key or Network Error).";
             }
         };
 
@@ -260,7 +261,11 @@
                     signal: controller.signal 
                 });
                 clearTimeout(timeoutId);
-                if (!response.ok) throw new Error("API Error");
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Image Analysis API Error:", errorText);
+                    throw new Error("API Error");
+                }
                 return await response.json();
             } catch (error) {
                 clearTimeout(timeoutId);
@@ -436,7 +441,8 @@
                 setChatInput('');
                 setChatLoading(true);
 
-                const botResponse = await callGrok(userMsg);
+                // Use new Google Gemini Chat function
+                const botResponse = await callChatAI(userMsg, lang);
                 
                 setChatMessages(prev => [...prev, {role: 'assistant', content: botResponse}]);
                 setChatLoading(false);
