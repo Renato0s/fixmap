@@ -51,7 +51,6 @@
         // --- API & CONFIG ---
         
         // GOOGLE API (Для анализа фото)
-        // Обновлен: установлен ваш персональный платный ключ
         const googleImageApiKey = "AIzaSyAena0EsktAw7VDA6NPTh4E7_BrULQKI4M"; 
         
         // Contractors
@@ -87,11 +86,12 @@
                 admin_role: "Администратор",
                 contractor_role: "Подрядчик",
                 logout: "Выйти",
-                accept: "Принять",
-                reject: "Отклонить",
-                upload_finish: "Загрузить и завершить",
-                upload_hint: "Загрузите фото \"ПОСЛЕ\"",
-                result_label: "РЕЗУЛЬТАТ:",
+                back_to_list: "Назад к списку",
+                
+                // Status Actions
+                btn_accept: "Принять",
+                btn_work: "В работу",
+                btn_resolve: "Решено",
                 
                 // Analyze
                 analyzing_title: "ИИ ищет подрядчика...",
@@ -111,6 +111,7 @@
                 
                 // Statuses
                 status_new: "Назначена",
+                status_accepted: "Принято",
                 status_work: "В работе",
                 status_done: "Выполнено",
                 status_rejected: "Отклонена"
@@ -137,11 +138,12 @@
                 admin_role: "Administrator",
                 contractor_role: "Contractor",
                 logout: "Log Out",
-                accept: "Accept",
-                reject: "Reject",
-                upload_finish: "Upload & Finish",
-                upload_hint: "Upload 'AFTER' photo",
-                result_label: "RESULT:",
+                back_to_list: "Back to List",
+
+                // Status Actions
+                btn_accept: "Accept",
+                btn_work: "Start Work",
+                btn_resolve: "Resolved",
                 
                 // Analyze
                 analyzing_title: "AI is assigning contractor...",
@@ -161,6 +163,7 @@
                 
                 // Statuses
                 status_new: "Assigned",
+                status_accepted: "Accepted",
                 status_work: "In Progress",
                 status_done: "Done",
                 status_rejected: "Rejected"
@@ -270,6 +273,9 @@
             
             const [reports, setReports] = React.useState([]);
             
+            // Contractor Dash State
+            const [selectedReport, setSelectedReport] = React.useState(null);
+
             // Upload & Form Data
             const [file, setFile] = React.useState(null);
             const [preview, setPreview] = React.useState(null);
@@ -314,13 +320,44 @@
             const findContractor = (catId) => CONTRACTORS.find(c => c.type === catId) || CONTRACTORS.find(c => c.type === 'admin');
 
             const translateStatus = (status) => {
-                const map = { 'Назначена': T.status_new, 'В работе': T.status_work, 'Выполнено': T.status_done, 'Отклонена': T.status_rejected };
+                const map = { 
+                    'Назначена': T.status_new, 
+                    'Принято': T.status_accepted, 
+                    'В работе': T.status_work, 
+                    'Выполнено': T.status_done, 
+                    'Отклонена': T.status_rejected 
+                };
                 return map[status] || status;
             };
 
             const StatusBadge = ({ status }) => {
-                const colors = { 'Назначена': 'bg-blue-100 text-blue-700', 'В работе': 'bg-yellow-100 text-yellow-700', 'Выполнено': 'bg-green-100 text-green-700', 'Отклонена': 'bg-red-100 text-red-700' };
+                const colors = { 
+                    'Назначена': 'bg-blue-100 text-blue-700', 
+                    'Принято': 'bg-purple-100 text-purple-700',
+                    'В работе': 'bg-yellow-100 text-yellow-700', 
+                    'Выполнено': 'bg-green-100 text-green-700', 
+                    'Отклонена': 'bg-red-100 text-red-700' 
+                };
                 return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors[status] || 'bg-gray-100'}`}>{translateStatus(status)}</span>;
+            };
+
+            const updateReportStatus = async (reportId, newStatus) => {
+                // Update local state first for immediate feedback
+                setReports(prev => prev.map(r => r.id === reportId ? {...r, status: newStatus} : r));
+                if (selectedReport && selectedReport.id === reportId) {
+                    setSelectedReport(prev => ({...prev, status: newStatus}));
+                }
+
+                if (isFirebaseAvailable && db && !isOfflineMode) {
+                    try {
+                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').doc(reportId).update({
+                            status: newStatus
+                        });
+                    } catch (e) {
+                        console.error("Status update failed", e);
+                        alert("Error updating status online");
+                    }
+                }
             };
 
             const selectLanguage = (l) => { setLang(l); setView('home'); };
@@ -406,32 +443,94 @@
             }
 
             if (view === 'dash') {
+                // Determine which reports to show
                 const myReports = userRole === 'admin' ? reports : reports.filter(r => r.contractorId === currentUser.id);
                 const sorted = [...myReports].sort((a, b) => (b.isPremium === a.isPremium) ? 0 : b.isPremium ? 1 : -1);
 
                 return (
                     <div className="min-h-screen bg-gray-50 flex flex-col">
+                        {/* Header */}
                         <div className="bg-white border-b p-4 sticky top-0 z-20 shadow-sm flex justify-between items-center">
-                            <div>
-                                <h2 className="font-bold text-gray-800">{currentUser.name}</h2>
-                                <div className="text-xs text-gray-500">{userRole === 'admin' ? T.admin_role : T.contractor_role}</div>
-                            </div>
-                            <button onClick={() => setView('home')} className="text-red-500 text-xs bg-red-50 px-3 py-1 rounded-lg font-bold">{T.logout}</button>
+                            {selectedReport ? (
+                                <button onClick={() => setSelectedReport(null)} className="flex items-center gap-1 text-blue-600 font-bold">
+                                    <Icon name="arrow-left" size={18}/> {T.back_to_list}
+                                </button>
+                            ) : (
+                                <div>
+                                    <h2 className="font-bold text-gray-800">{currentUser.name}</h2>
+                                    <div className="text-xs text-gray-500">{userRole === 'admin' ? T.admin_role : T.contractor_role}</div>
+                                </div>
+                            )}
+                            <button onClick={() => { setSelectedReport(null); setView('home'); }} className="text-red-500 text-xs bg-red-50 px-3 py-1 rounded-lg font-bold">{T.logout}</button>
                         </div>
+
+                        {/* Content Area */}
                         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                            {sorted.length === 0 && <div className="text-center text-gray-400 mt-10">{T.active_tasks}</div>}
-                            {sorted.map(r => (
-                                <div key={r.id} className={`bg-white rounded-xl overflow-hidden shadow-sm border ${r.isPremium ? 'border-yellow-400 ring-1 ring-yellow-100' : 'border-gray-200'}`}>
-                                    {r.isPremium && <div className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 text-center">🔥 PREMIUM</div>}
-                                    <div className="p-4">
-                                        <div className="flex justify-between items-start mb-2"><StatusBadge status={r.status} /><span className="text-xs text-gray-400">{formatDate(r.createdAt, lang)}</span></div>
-                                        <div className="flex gap-3 mb-3">
-                                            {r.photoBefore && <img src={r.photoBefore} className="w-16 h-16 rounded-lg object-cover bg-gray-100"/>}
-                                            <div><h3 className="font-bold text-sm">{r.type}</h3><p className="text-xs text-gray-600 line-clamp-2">{r.description}</p></div>
+                            {/* IF SELECTED: Show Details & Actions */}
+                            {selectedReport ? (
+                                <div className="space-y-4">
+                                    <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
+                                        <div className="relative h-64 bg-gray-200">
+                                            <img src={selectedReport.photoBefore} className="w-full h-full object-cover"/>
+                                            {selectedReport.isPremium && <div className="absolute top-4 right-4 bg-yellow-400 text-yellow-900 font-bold px-3 py-1 rounded-full text-xs shadow-md">🔥 PREMIUM</div>}
+                                            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-sm font-bold shadow-sm">
+                                                <StatusBadge status={selectedReport.status}/>
+                                            </div>
+                                        </div>
+                                        <div className="p-6">
+                                            <h2 className="text-xl font-bold mb-2">{selectedReport.type}</h2>
+                                            <p className="text-gray-600 mb-6">{selectedReport.description}</p>
+                                            
+                                            <div className="space-y-3 text-sm text-gray-500 bg-gray-50 p-4 rounded-xl">
+                                                <div className="flex items-center gap-3"><Icon name="map-pin" size={16}/> {selectedReport.address}</div>
+                                                <div className="flex items-center gap-3"><Icon name="user" size={16}/> {selectedReport.fio}</div>
+                                                <div className="flex items-center gap-3"><Icon name="calendar" size={16}/> {formatDate(selectedReport.createdAt, lang)}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* ACTION BUTTONS */}
+                                        <div className="p-4 bg-gray-50 border-t flex flex-col gap-3">
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <button 
+                                                    onClick={() => updateReportStatus(selectedReport.id, "Принято")}
+                                                    className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'Принято' ? 'bg-purple-600 text-white shadow-md' : 'bg-white border hover:bg-purple-50 text-gray-700'}`}>
+                                                    <Icon name="check-circle" size={18}/> {T.btn_accept}
+                                                </button>
+                                                <button 
+                                                    onClick={() => updateReportStatus(selectedReport.id, "В работе")}
+                                                    className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'В работе' ? 'bg-yellow-500 text-white shadow-md' : 'bg-white border hover:bg-yellow-50 text-gray-700'}`}>
+                                                    <Icon name="hammer" size={18}/> {T.btn_work}
+                                                </button>
+                                                <button 
+                                                    onClick={() => updateReportStatus(selectedReport.id, "Выполнено")}
+                                                    className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'Выполнено' ? 'bg-green-600 text-white shadow-md' : 'bg-white border hover:bg-green-50 text-gray-700'}`}>
+                                                    <Icon name="check-check" size={18}/> {T.btn_resolve}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            ))}
+                            ) : (
+                                /* ELSE: Show List */
+                                <>
+                                    {sorted.length === 0 && <div className="text-center text-gray-400 mt-10">{T.active_tasks}</div>}
+                                    {sorted.map(r => (
+                                        <div 
+                                            key={r.id} 
+                                            onClick={() => setSelectedReport(r)}
+                                            className={`bg-white rounded-xl overflow-hidden shadow-sm border cursor-pointer hover:shadow-md transition active:scale-95 ${r.isPremium ? 'border-yellow-400 ring-1 ring-yellow-100' : 'border-gray-200'}`}>
+                                            {r.isPremium && <div className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 text-center">🔥 PREMIUM</div>}
+                                            <div className="p-4">
+                                                <div className="flex justify-between items-start mb-2"><StatusBadge status={r.status} /><span className="text-xs text-gray-400">{formatDate(r.createdAt, lang)}</span></div>
+                                                <div className="flex gap-3 mb-3">
+                                                    {r.photoBefore && <img src={r.photoBefore} className="w-16 h-16 rounded-lg object-cover bg-gray-100"/>}
+                                                    <div><h3 className="font-bold text-sm">{r.type}</h3><p className="text-xs text-gray-600 line-clamp-2">{r.description}</p></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
+                            )}
                         </div>
                     </div>
                 );
