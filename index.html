@@ -108,7 +108,13 @@
                 premium_desc: "Приоритетное обслуживание",
                 submit_btn: "Отправить в работу",
                 geo_error: "Не удалось получить геопозицию",
+                importance_label: "Важность:",
                 
+                // Importance Levels
+                imp_high: "Высокая",
+                imp_medium: "Средняя",
+                imp_low: "Низкая",
+
                 // Statuses
                 status_new: "Назначена",
                 status_accepted: "Принято",
@@ -160,6 +166,12 @@
                 premium_desc: "Priority service",
                 submit_btn: "Submit Report",
                 geo_error: "Could not get location",
+                importance_label: "Importance:",
+
+                // Importance Levels
+                imp_high: "High",
+                imp_medium: "Medium",
+                imp_low: "Low",
                 
                 // Statuses
                 status_new: "Assigned",
@@ -234,7 +246,8 @@
                 1. "category_id": MUST be one of ["road", "waste", "water", "light", "other"].
                 2. "type": Short title in ${lang}.
                 3. "description": Description in ${lang}.
-                Example JSON: { "category_id": "road", "type": "Pothole", "description": "Big hole" }`;
+                4. "importance": "High", "Medium", or "Low" based on urgency/danger.
+                Example JSON: { "category_id": "road", "type": "Pothole", "description": "Big hole", "importance": "High" }`;
                 
                 const data = await callGeminiImage({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: b64 } }] }] });
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -330,6 +343,13 @@
                 return map[status] || status;
             };
 
+            const translateImportance = (imp) => {
+                if (!imp) return T.imp_low;
+                if (imp === 'High') return T.imp_high;
+                if (imp === 'Medium') return T.imp_medium;
+                return T.imp_low;
+            };
+
             const StatusBadge = ({ status }) => {
                 const colors = { 
                     'Назначена': 'bg-blue-100 text-blue-700', 
@@ -339,6 +359,19 @@
                     'Отклонена': 'bg-red-100 text-red-700' 
                 };
                 return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors[status] || 'bg-gray-100'}`}>{translateStatus(status)}</span>;
+            };
+
+            const ImportanceBadge = ({ importance }) => {
+                const colors = { 
+                    'High': 'bg-red-100 text-red-700 border-red-200', 
+                    'Medium': 'bg-orange-100 text-orange-700 border-orange-200', 
+                    'Low': 'bg-green-100 text-green-700 border-green-200' 
+                };
+                return (
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded border ${colors[importance] || colors['Low']}`}>
+                        {translateImportance(importance)}
+                    </span>
+                );
             };
 
             const updateReportStatus = async (reportId, newStatus) => {
@@ -369,7 +402,7 @@
                     setPreview(URL.createObjectURL(f));
                     setView('analyze');
                     const res = await analyzeImage(f, lang);
-                    setAnalysis(res || { category_id: 'other', type: "Manual", description: "..." });
+                    setAnalysis(res || { category_id: 'other', type: "Manual", description: "...", importance: "Low" });
                 }
             };
 
@@ -478,7 +511,10 @@
                                             </div>
                                         </div>
                                         <div className="p-6">
-                                            <h2 className="text-xl font-bold mb-2">{selectedReport.type}</h2>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h2 className="text-xl font-bold">{selectedReport.type}</h2>
+                                                <ImportanceBadge importance={selectedReport.importance}/>
+                                            </div>
                                             <p className="text-gray-600 mb-6">{selectedReport.description}</p>
                                             
                                             <div className="space-y-3 text-sm text-gray-500 bg-gray-50 p-4 rounded-xl">
@@ -521,7 +557,13 @@
                                             className={`bg-white rounded-xl overflow-hidden shadow-sm border cursor-pointer hover:shadow-md transition active:scale-95 ${r.isPremium ? 'border-yellow-400 ring-1 ring-yellow-100' : 'border-gray-200'}`}>
                                             {r.isPremium && <div className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 text-center">🔥 PREMIUM</div>}
                                             <div className="p-4">
-                                                <div className="flex justify-between items-start mb-2"><StatusBadge status={r.status} /><span className="text-xs text-gray-400">{formatDate(r.createdAt, lang)}</span></div>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex gap-2 items-center">
+                                                        <StatusBadge status={r.status} />
+                                                        <ImportanceBadge importance={r.importance} />
+                                                    </div>
+                                                    <span className="text-xs text-gray-400">{formatDate(r.createdAt, lang)}</span>
+                                                </div>
                                                 <div className="flex gap-3 mb-3">
                                                     {r.photoBefore && <img src={r.photoBefore} className="w-16 h-16 rounded-lg object-cover bg-gray-100"/>}
                                                     <div><h3 className="font-bold text-sm">{r.type}</h3><p className="text-xs text-gray-600 line-clamp-2">{r.description}</p></div>
@@ -558,6 +600,12 @@
                         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                                 <div className="flex gap-3 mb-4"><img src={preview} className="w-20 h-20 rounded-lg object-cover bg-gray-100"/><div><h3 className="font-bold text-sm">{analysis.type}</h3><p className="text-xs text-gray-500 mt-1">{analysis.description}</p></div></div>
+                                
+                                <div className="mb-4 flex items-center justify-between">
+                                    <span className="text-sm font-bold text-gray-700">{T.importance_label}</span>
+                                    <ImportanceBadge importance={analysis.importance}/>
+                                </div>
+                                
                                 <div className="bg-gray-50 p-3 rounded-lg flex items-center justify-between border"><span className="text-xs text-gray-500">{T.assigned_to}</span><span className="text-xs font-bold text-gray-800 flex items-center gap-1"><Icon name="hard-hat" size={14} className="text-orange-500"/> {assigned?.name || 'Admin'}</span></div>
                             </div>
                             <div className="space-y-3">
@@ -607,7 +655,12 @@
                                 <div className="flex gap-3">
                                     <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0"><Icon name={r.category_id === 'road' ? 'road' : r.category_id === 'waste' ? 'trash-2' : 'alert-circle'} size={20}/></div>
                                     <div className="flex-1">
-                                        <div className="flex justify-between mb-1"><h3 className="font-bold text-sm">{r.type}</h3><StatusBadge status={r.status}/></div>
+                                        <div className="flex justify-between mb-1">
+                                            <h3 className="font-bold text-sm">{r.type}</h3>
+                                            <div className="flex gap-1">
+                                                 <StatusBadge status={r.status}/>
+                                            </div>
+                                        </div>
                                         <p className="text-xs text-gray-500 line-clamp-2">{r.description}</p>
                                     </div>
                                 </div>
