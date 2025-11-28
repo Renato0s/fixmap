@@ -34,6 +34,10 @@
         @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
         #app-loader { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
         
+        /* Markdown styles for Grok response */
+        .prose p { margin-bottom: 0.5em; }
+        .prose ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.5em; }
+        
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -49,9 +53,14 @@
 
     <script type="text/babel">
         // --- API & CONFIG ---
-        const apiKey = "AIzaSyDrl0AOqQ0amog0WhH2MS9cv1ueLC-b2gk"; 
+        const geminiApiKey = "AIzaSyDrl0AOqQ0amog0WhH2MS9cv1ueLC-b2gk"; 
         
-        // Contractors (Hardcoded for demo)
+        // Grok / OpenRouter Config
+        const grokApiKey = "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";
+        const grokBaseUrl = "https://openrouter.ai/api/v1";
+        const grokModel = "google/gemini-2.0-flash-lite-preview-02-05:free"; // Using a reliable free model on OpenRouter as requested or fallback
+
+        // Contractors
         const CONTRACTORS = [
             { id: 'c1', email: 'road@bishkek.kg', name: 'БишкекАсфальтСервис', type: 'road' },
             { id: 'c2', email: 'waste@bishkek.kg', name: 'МП Тазалык', type: 'waste' },
@@ -100,10 +109,11 @@
                 confirm_desc: "Подтвердите данные перед отправкой",
                 assigned_to: "Назначен подрядчик:",
                 name_ph: "Ваше ФИО",
-                addr_ph: "Адрес проблемы",
+                addr_ph: "Адрес или координаты",
                 premium_label: "Premium заявка",
                 premium_desc: "Приоритетное обслуживание",
                 submit_btn: "Отправить в работу",
+                geo_error: "Не удалось получить геопозицию",
                 
                 // Statuses
                 status_new: "Назначена",
@@ -111,9 +121,11 @@
                 status_done: "Выполнено",
                 status_rejected: "Отклонена",
                 
-                // AI Fallbacks
-                manual_type: "Проблема (Ручной ввод)",
-                manual_desc: "Описание отсутствует"
+                // Chat
+                chat_title: "Советник (Grok AI)",
+                chat_placeholder: "Задайте вопрос...",
+                chat_send: "Отправить",
+                chat_welcome: "Привет! Я ИИ-помощник FixMap. Спросите меня о городских службах или правилах."
             },
             en: {
                 app_name: "FixMap",
@@ -153,10 +165,11 @@
                 confirm_desc: "Confirm details before submitting",
                 assigned_to: "Assigned Contractor:",
                 name_ph: "Your Name",
-                addr_ph: "Address",
+                addr_ph: "Address or Coordinates",
                 premium_label: "Premium Request",
                 premium_desc: "Priority service",
                 submit_btn: "Submit Report",
+                geo_error: "Could not get location",
                 
                 // Statuses
                 status_new: "Assigned",
@@ -164,9 +177,11 @@
                 status_done: "Done",
                 status_rejected: "Rejected",
 
-                // AI Fallbacks
-                manual_type: "Issue (Manual)",
-                manual_desc: "No description"
+                // Chat
+                chat_title: "City Advisor (Grok AI)",
+                chat_placeholder: "Ask a question...",
+                chat_send: "Send",
+                chat_welcome: "Hi! I'm FixMap AI. Ask me about city services or regulations."
             }
         };
 
@@ -199,13 +214,45 @@
             return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
-        // --- GEMINI SERVICE ---
+        // --- GROK SERVICE (New) ---
+        const callGrok = async (userText) => {
+            try {
+                const response = await fetch(`${grokBaseUrl}/chat/completions`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${grokApiKey}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": window.location.href, // Required by OpenRouter
+                        "X-Title": "FixMap" // Optional
+                    },
+                    body: JSON.stringify({
+                        "model": grokModel,
+                        "messages": [
+                          {"role": "system", "content": "You are a helpful city assistant for the FixMap app. Keep answers concise and helpful."},
+                          {"role": "user", "content": userText}
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Grok API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.choices[0].message.content;
+            } catch (e) {
+                console.error("Grok failed:", e);
+                return "Извините, сервис ИИ сейчас недоступен. (Error calling OpenRouter)";
+            }
+        };
+
+        // --- GEMINI SERVICE (Image Analysis) ---
         const callGemini = async (payload) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); 
 
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
                 const response = await fetch(url, { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
@@ -224,22 +271,19 @@
         const analyzeImage = async (file, lang) => {
             try {
                 const b64 = await fileToBase64(file);
-                // Prompt asks for specific ID codes for logic, but description in user's language
                 const prompt = `Analyze this civic issue. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
                 Return JSON with fields:
                 1. "category_id": MUST be one of ["road", "waste", "water", "light", "other"].
                 2. "type": Short title in ${lang}.
                 3. "description": Description in ${lang}.
-                
-                Example JSON:
-                { "category_id": "road", "type": "Pothole", "description": "Big hole in asphalt" }`;
+                Example JSON: { "category_id": "road", "type": "Pothole", "description": "Big hole" }`;
                 
                 const data = await callGemini({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: b64 } }] }] });
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (e) {
                 console.warn("AI Fail or Timeout", e);
-                return null; // Will trigger fallback in UI
+                return null;
             }
         };
 
@@ -261,12 +305,13 @@
 
         // --- MAIN APP ---
         const App = () => {
-            const [view, setView] = React.useState('lang_select'); // Initial view
-            const [lang, setLang] = React.useState('en'); // Default lang
+            const [view, setView] = React.useState('lang_select'); 
+            const [lang, setLang] = React.useState('en');
             const [userRole, setUserRole] = React.useState('guest'); 
             const [currentUser, setCurrentUser] = React.useState(null);
             const [authUser, setAuthUser] = React.useState(null);
             const [isOfflineMode, setIsOfflineMode] = React.useState(false); 
+            const [isLocating, setIsLocating] = React.useState(false);
             
             const [reports, setReports] = React.useState([]);
             
@@ -281,6 +326,12 @@
             // Auth Data
             const [email, setEmail] = React.useState('');
             const [pass, setPass] = React.useState('');
+
+            // Chat Data
+            const [showChat, setShowChat] = React.useState(false);
+            const [chatMessages, setChatMessages] = React.useState([]);
+            const [chatInput, setChatInput] = React.useState('');
+            const [chatLoading, setChatLoading] = React.useState(false);
 
             const T = TRANSLATIONS[lang];
 
@@ -310,36 +361,20 @@
                 }
             }, [authUser, isOfflineMode]);
 
-            // --- HELPERS ---
-            const findContractor = (catId) => {
-                return CONTRACTORS.find(c => c.type === catId) || CONTRACTORS.find(c => c.type === 'admin');
-            };
+            // --- HELPERS & HANDLERS ---
+            const findContractor = (catId) => CONTRACTORS.find(c => c.type === catId) || CONTRACTORS.find(c => c.type === 'admin');
 
             const translateStatus = (status) => {
-                const map = {
-                    'Назначена': T.status_new,
-                    'В работе': T.status_work,
-                    'Выполнено': T.status_done,
-                    'Отклонена': T.status_rejected
-                };
+                const map = { 'Назначена': T.status_new, 'В работе': T.status_work, 'Выполнено': T.status_done, 'Отклонена': T.status_rejected };
                 return map[status] || status;
             };
 
             const StatusBadge = ({ status }) => {
-                const colors = {
-                    'Назначена': 'bg-blue-100 text-blue-700',
-                    'В работе': 'bg-yellow-100 text-yellow-700',
-                    'Выполнено': 'bg-green-100 text-green-700',
-                    'Отклонена': 'bg-red-100 text-red-700'
-                };
+                const colors = { 'Назначена': 'bg-blue-100 text-blue-700', 'В работе': 'bg-yellow-100 text-yellow-700', 'Выполнено': 'bg-green-100 text-green-700', 'Отклонена': 'bg-red-100 text-red-700' };
                 return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors[status] || 'bg-gray-100'}`}>{translateStatus(status)}</span>;
             };
 
-            // --- HANDLERS ---
-            const selectLanguage = (l) => {
-                setLang(l);
-                setView('home');
-            };
+            const selectLanguage = (l) => { setLang(l); setView('home'); };
 
             const handleFile = async (e) => {
                 if (e.target.files?.[0]) {
@@ -347,86 +382,64 @@
                     setFile(f);
                     setPreview(URL.createObjectURL(f));
                     setView('analyze');
-                    
                     const res = await analyzeImage(f, lang);
-                    setAnalysis(res || { category_id: 'other', type: T.manual_type, description: T.manual_desc });
+                    setAnalysis(res || { category_id: 'other', type: "Manual", description: "..." });
                 }
             };
 
-            const skipAnalysis = () => {
-                setAnalysis({ category_id: 'other', type: T.manual_type, description: T.manual_desc });
+            const handleGeolocation = () => {
+                if (!navigator.geolocation) { alert("Not supported"); return; }
+                setIsLocating(true);
+                navigator.geolocation.getCurrentPosition(
+                    (p) => { setAddress(`${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`); setIsLocating(false); },
+                    () => { alert(T.geo_error); setIsLocating(false); }
+                );
             };
 
             const submitReport = async () => {
                 const assigned = findContractor(analysis.category_id);
-                
                 const newReport = {
                     ...analysis,
-                    fio: fio || (lang === 'ru' ? 'Аноним' : 'Anonymous'),
-                    address: address || (lang === 'ru' ? 'Не указан' : 'Not specified'),
+                    fio: fio || 'Anon',
+                    address: address || 'No address',
                     isPremium,
                     photoBefore: preview,
-                    photoAfter: null,
                     contractorId: assigned?.id || 'admin',
                     contractorName: assigned?.name || 'Admin',
-                    status: 'Назначена', // Internal status is always Russian/Fixed key
+                    status: 'Назначена',
                     createdAt: new Date(),
-                    id: Date.now().toString(),
-                    history: [{ status: 'Назначена', date: new Date() }]
+                    id: Date.now().toString()
                 };
-
-                setReports([newReport, ...reports]); // Optimistic
-
+                setReports([newReport, ...reports]);
                 if (isFirebaseAvailable && db && !isOfflineMode) {
-                    try {
-                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({
-                            ...newReport,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                    } catch(e) { setIsOfflineMode(true); }
+                    try { await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({ ...newReport, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); } 
+                    catch(e) { setIsOfflineMode(true); }
                 }
-                
-                // Cleanup
-                setFile(null); setAnalysis(null); setFio(''); setAddress(''); setIsPremium(false);
-                setView('home');
+                setFile(null); setAnalysis(null); setFio(''); setAddress(''); setIsPremium(false); setView('home');
             };
 
             const handleLogin = () => {
                 const contractor = CONTRACTORS.find(c => c.email === email);
-                if (contractor) {
-                    if (pass === '123') {
-                        setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor');
-                        setCurrentUser(contractor);
-                        setView('dash');
-                    } else alert(T.wrong_pass);
-                } else alert(T.user_not_found);
+                if (contractor && pass === '123') {
+                    setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor');
+                    setCurrentUser(contractor);
+                    setView('dash');
+                } else alert(T.wrong_pass);
             };
 
-            const updateStatus = async (report, newStatus, extra = {}) => {
-                let updated = { ...report, status: newStatus, ...extra };
-                if (newStatus === 'Отклонена') {
-                    updated.contractorId = 'admin';
-                }
+            const handleChatSubmit = async (e) => {
+                e.preventDefault();
+                if (!chatInput.trim()) return;
                 
-                setReports(reports.map(r => r.id === report.id ? updated : r));
-                
-                if (isFirebaseAvailable && db && !isOfflineMode) {
-                    try {
-                        const ref = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').doc(report.id);
-                        await ref.update({
-                            status: newStatus,
-                            contractorId: updated.contractorId,
-                            ...extra
-                        });
-                    } catch(e) {}
-                }
-            };
+                const userMsg = chatInput;
+                setChatMessages(prev => [...prev, {role: 'user', content: userMsg}]);
+                setChatInput('');
+                setChatLoading(true);
 
-            const handlePhotoAfter = (e, report) => {
-                if (e.target.files?.[0]) {
-                    const url = URL.createObjectURL(e.target.files[0]);
-                    updateStatus(report, 'Выполнено', { photoAfter: url });
-                }
+                const botResponse = await callGrok(userMsg);
+                
+                setChatMessages(prev => [...prev, {role: 'assistant', content: botResponse}]);
+                setChatLoading(false);
             };
 
             // --- VIEWS ---
@@ -434,15 +447,10 @@
             if (view === 'lang_select') {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-blue-600 text-white p-6 relative overflow-hidden">
-                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                          <h1 className="text-5xl font-extrabold mb-12 relative z-10 tracking-tight">FixMap</h1>
                          <div className="flex flex-col gap-4 w-full max-w-xs relative z-10">
-                             <button onClick={() => selectLanguage('en')} className="bg-white text-blue-600 font-bold py-4 rounded-2xl shadow-lg hover:scale-105 transition flex items-center justify-center gap-3">
-                                 <span className="text-2xl">🇬🇧</span> English
-                             </button>
-                             <button onClick={() => selectLanguage('ru')} className="bg-white/20 border border-white/40 backdrop-blur-md text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-white/30 transition flex items-center justify-center gap-3">
-                                 <span className="text-2xl">🇷🇺</span> Русский
-                             </button>
+                             <button onClick={() => selectLanguage('en')} className="bg-white text-blue-600 font-bold py-4 rounded-2xl shadow-lg hover:scale-105 transition flex items-center justify-center gap-3"><span className="text-2xl">🇬🇧</span> English</button>
+                             <button onClick={() => selectLanguage('ru')} className="bg-white/20 border border-white/40 backdrop-blur-md text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-white/30 transition flex items-center justify-center gap-3"><span className="text-2xl">🇷🇺</span> Русский</button>
                          </div>
                     </div>
                 );
@@ -454,13 +462,10 @@
                         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm relative">
                             <button onClick={() => setView('home')} className="absolute top-4 right-4 text-gray-400"><Icon name="x"/></button>
                             <h2 className="text-xl font-bold mb-6 text-gray-800">{T.login_title}</h2>
-                            <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-4 space-y-1">
-                                <p><b>Roads:</b> road@bishkek.kg</p>
-                                <p><b>Pass:</b> 123</p>
-                            </div>
-                            <input value={email} onChange={e=>setEmail(e.target.value)} placeholder={T.email_ph} className="w-full border p-3 rounded-xl mb-3 outline-none focus:ring-2 focus:ring-blue-500"/>
-                            <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={T.pass_ph} className="w-full border p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-blue-500"/>
-                            <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-blue-700">{T.login_submit}</button>
+                            <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-4 space-y-1"><p><b>Roads:</b> road@bishkek.kg</p><p><b>Pass:</b> 123</p></div>
+                            <input value={email} onChange={e=>setEmail(e.target.value)} placeholder={T.email_ph} className="w-full border p-3 rounded-xl mb-3"/>
+                            <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={T.pass_ph} className="w-full border p-3 rounded-xl mb-6"/>
+                            <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg">{T.login_submit}</button>
                         </div>
                     </div>
                 );
@@ -475,9 +480,7 @@
                         <div className="bg-white border-b p-4 sticky top-0 z-20 shadow-sm flex justify-between items-center">
                             <div>
                                 <h2 className="font-bold text-gray-800">{currentUser.name}</h2>
-                                <div className="text-xs text-gray-500 flex items-center gap-2">
-                                    {userRole === 'admin' ? T.admin_role : T.contractor_role}
-                                </div>
+                                <div className="text-xs text-gray-500">{userRole === 'admin' ? T.admin_role : T.contractor_role}</div>
                             </div>
                             <button onClick={() => setView('home')} className="text-red-500 text-xs bg-red-50 px-3 py-1 rounded-lg font-bold">{T.logout}</button>
                         </div>
@@ -487,38 +490,11 @@
                                 <div key={r.id} className={`bg-white rounded-xl overflow-hidden shadow-sm border ${r.isPremium ? 'border-yellow-400 ring-1 ring-yellow-100' : 'border-gray-200'}`}>
                                     {r.isPremium && <div className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 text-center">🔥 PREMIUM</div>}
                                     <div className="p-4">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <StatusBadge status={r.status} />
-                                            <span className="text-xs text-gray-400">{formatDate(r.createdAt, lang)}</span>
-                                        </div>
+                                        <div className="flex justify-between items-start mb-2"><StatusBadge status={r.status} /><span className="text-xs text-gray-400">{formatDate(r.createdAt, lang)}</span></div>
                                         <div className="flex gap-3 mb-3">
                                             {r.photoBefore && <img src={r.photoBefore} className="w-16 h-16 rounded-lg object-cover bg-gray-100"/>}
-                                            <div>
-                                                <h3 className="font-bold text-sm text-gray-800">{r.type}</h3>
-                                                <p className="text-xs text-gray-600 line-clamp-2">{r.description}</p>
-                                                <div className="mt-1 text-xs text-gray-500 flex items-center gap-1"><Icon name="map-pin" size={10}/> {r.address}</div>
-                                            </div>
+                                            <div><h3 className="font-bold text-sm">{r.type}</h3><p className="text-xs text-gray-600 line-clamp-2">{r.description}</p></div>
                                         </div>
-                                        {r.status === 'Назначена' && (
-                                            <div className="grid grid-cols-2 gap-2 mt-2">
-                                                <button onClick={() => updateStatus(r, 'В работе')} className="bg-blue-600 text-white py-2 rounded-lg text-xs font-bold">{T.accept}</button>
-                                                <button onClick={() => updateStatus(r, 'Отклонена')} className="bg-red-50 text-red-600 py-2 rounded-lg text-xs font-bold">{T.reject}</button>
-                                            </div>
-                                        )}
-                                        {r.status === 'В работе' && (
-                                            <div className="mt-3 bg-gray-50 p-3 rounded-lg border border-dashed border-gray-300 text-center">
-                                                <label className="bg-white border px-3 py-2 rounded-lg text-xs font-bold cursor-pointer inline-flex items-center gap-2 shadow-sm">
-                                                    <Icon name="camera"/> {T.upload_finish}
-                                                    <input type="file" className="hidden" onChange={(e) => handlePhotoAfter(e, r)}/>
-                                                </label>
-                                            </div>
-                                        )}
-                                        {r.status === 'Выполнено' && r.photoAfter && (
-                                            <div className="mt-2">
-                                                <div className="text-[10px] font-bold text-green-600 mb-1">{T.result_label}</div>
-                                                <img src={r.photoAfter} className="w-full h-32 object-cover rounded-lg border border-green-200"/>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -532,12 +508,10 @@
                 return (
                     <div className="h-screen bg-gray-900 flex flex-col items-center justify-center relative">
                         <img src={preview} className="absolute inset-0 w-full h-full object-cover opacity-50"/>
-                        <div className="scan-line"></div>
                         <div className="relative z-10 text-center text-white px-6">
                             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"/>
                             <h2 className="text-xl font-bold">{T.analyzing_title}</h2>
-                            <p className="text-sm opacity-80 mt-2 mb-8">{T.analyzing_desc}</p>
-                            <button onClick={skipAnalysis} className="bg-white/10 hover:bg-white/20 text-white text-xs px-4 py-2 rounded-full backdrop-blur-md transition">{T.skip_btn}</button>
+                            <button onClick={() => setAnalysis({category_id: 'other', type: 'Manual', description: '...'})} className="mt-8 bg-white/10 px-4 py-2 rounded-full text-xs">{T.skip_btn}</button>
                         </div>
                     </div>
                 );
@@ -547,57 +521,38 @@
                 const assigned = findContractor(analysis.category_id);
                 return (
                     <div className="min-h-screen bg-gray-50 flex flex-col">
-                        <div className="bg-white p-4 shadow-sm">
-                            <h2 className="text-lg font-bold mb-1">{T.new_report_title}</h2>
-                            <p className="text-xs text-gray-500">{T.confirm_desc}</p>
-                        </div>
+                        <div className="bg-white p-4 shadow-sm"><h2 className="text-lg font-bold mb-1">{T.new_report_title}</h2><p className="text-xs text-gray-500">{T.confirm_desc}</p></div>
                         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                <div className="flex gap-3 mb-4">
-                                    <img src={preview} className="w-20 h-20 rounded-lg object-cover bg-gray-100"/>
-                                    <div>
-                                        <h3 className="font-bold text-sm">{analysis.type}</h3>
-                                        <p className="text-xs text-gray-500 mt-1">{analysis.description}</p>
-                                    </div>
-                                </div>
-                                <div className="bg-gray-50 p-3 rounded-lg flex items-center justify-between border">
-                                    <span className="text-xs text-gray-500">{T.assigned_to}</span>
-                                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1">
-                                        <Icon name="hard-hat" size={14} className="text-orange-500"/> {assigned?.name || 'Admin'}
-                                    </span>
-                                </div>
+                                <div className="flex gap-3 mb-4"><img src={preview} className="w-20 h-20 rounded-lg object-cover bg-gray-100"/><div><h3 className="font-bold text-sm">{analysis.type}</h3><p className="text-xs text-gray-500 mt-1">{analysis.description}</p></div></div>
+                                <div className="bg-gray-50 p-3 rounded-lg flex items-center justify-between border"><span className="text-xs text-gray-500">{T.assigned_to}</span><span className="text-xs font-bold text-gray-800 flex items-center gap-1"><Icon name="hard-hat" size={14} className="text-orange-500"/> {assigned?.name || 'Admin'}</span></div>
                             </div>
                             <div className="space-y-3">
                                 <input value={fio} onChange={e=>setFio(e.target.value)} placeholder={T.name_ph} className="w-full bg-white border p-3 rounded-xl text-sm"/>
-                                <input value={address} onChange={e=>setAddress(e.target.value)} placeholder={T.addr_ph} className="w-full bg-white border p-3 rounded-xl text-sm"/>
-                                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition ${isPremium ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'}`}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isPremium ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-400'}`}><Icon name="crown"/></div>
-                                        <div>
-                                            <div className="font-bold text-sm">{T.premium_label}</div>
-                                            <div className="text-[10px] text-gray-500">{T.premium_desc}</div>
-                                        </div>
-                                    </div>
+                                <div className="flex gap-2">
+                                    <input value={address} onChange={e=>setAddress(e.target.value)} placeholder={T.addr_ph} className="flex-1 bg-white border p-3 rounded-xl text-sm"/>
+                                    <button onClick={handleGeolocation} disabled={isLocating} className="bg-blue-50 text-blue-600 p-3 rounded-xl border border-blue-100 flex items-center justify-center w-12">{isLocating ? <div className="animate-spin"><Icon name="loader-2" size={20}/></div> : <Icon name="map-pin" size={20}/>}</button>
+                                </div>
+                                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer ${isPremium ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'}`}>
+                                    <div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center ${isPremium ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-400'}`}><Icon name="crown"/></div><div><div className="font-bold text-sm">{T.premium_label}</div><div className="text-[10px] text-gray-500">{T.premium_desc}</div></div></div>
                                     <input type="checkbox" checked={isPremium} onChange={e=>setIsPremium(e.target.checked)} className="w-5 h-5 accent-yellow-500"/>
                                 </label>
                             </div>
                         </div>
-                        <div className="p-4 bg-white border-t">
-                            <button onClick={submitReport} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-200">{T.submit_btn}</button>
-                        </div>
+                        <div className="p-4 bg-white border-t"><button onClick={submitReport} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg">{T.submit_btn}</button></div>
                     </div>
                 );
             }
 
-            // HOME (Updated for FixMap branding)
+            // HOME
             return (
                 <div className="min-h-screen bg-gray-50 pb-20 relative">
                     <div className="bg-blue-600 text-white p-6 rounded-b-[30px] shadow-xl">
                         <div className="flex justify-between items-center mb-6">
                             <h1 className="text-2xl font-bold flex items-center gap-2"><Icon name="map"/> {T.app_name}</h1>
                             <div className="flex gap-2">
-                                <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-white/30">{lang === 'en' ? 'EN' : 'RU'}</button>
-                                <button onClick={() => setView('login')} className="text-xs bg-white/20 px-3 py-1 rounded-full hover:bg-white/30 transition">{T.staff_login_btn}</button>
+                                <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 w-8 h-8 rounded-full flex items-center justify-center font-bold">{lang === 'en' ? 'EN' : 'RU'}</button>
+                                <button onClick={() => setView('login')} className="text-xs bg-white/20 px-3 py-1 rounded-full">{T.staff_login_btn}</button>
                             </div>
                         </div>
                         <div className="bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/20">
@@ -614,32 +569,51 @@
                             <h2 className="font-bold text-gray-800">{T.feed_title}</h2>
                             {isOfflineMode && <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-1 rounded-full font-bold">{T.offline_mode}</span>}
                         </div>
-                        
                         {reports.map(r => (
-                            <div key={r.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 relative overflow-hidden ${r.isPremium ? 'ring-1 ring-yellow-200' : ''}`}>
-                                {r.isPremium && <div className="absolute top-0 right-0 bg-yellow-400 w-3 h-3 rounded-bl-lg"></div>}
+                            <div key={r.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 ${r.isPremium ? 'ring-1 ring-yellow-200' : ''}`}>
                                 <div className="flex gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-                                        <Icon name={r.category_id === 'road' ? 'road' : r.category_id === 'waste' ? 'trash-2' : 'alert-circle'} size={20}/>
-                                    </div>
+                                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0"><Icon name={r.category_id === 'road' ? 'road' : r.category_id === 'waste' ? 'trash-2' : 'alert-circle'} size={20}/></div>
                                     <div className="flex-1">
-                                        <div className="flex justify-between mb-1">
-                                            <h3 className="font-bold text-sm text-gray-800">{r.type}</h3>
-                                            <StatusBadge status={r.status}/>
-                                        </div>
+                                        <div className="flex justify-between mb-1"><h3 className="font-bold text-sm">{r.type}</h3><StatusBadge status={r.status}/></div>
                                         <p className="text-xs text-gray-500 line-clamp-2">{r.description}</p>
-                                        <div className="mt-2 pt-2 border-t flex justify-between items-center">
-                                            <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded flex items-center gap-1">
-                                                <Icon name="hard-hat" size={10}/> {r.contractorName}
-                                            </span>
-                                            {r.status === 'Выполнено' && <span className="text-[10px] font-bold text-green-600 flex items-center gap-1"><Icon name="check" size={10}/></span>}
-                                        </div>
                                     </div>
                                 </div>
                             </div>
                         ))}
                         {reports.length === 0 && <div className="text-center text-gray-400 py-10">{T.empty_feed}</div>}
                     </div>
+
+                    {/* Chat Button (Grok) */}
+                    <button onClick={() => setShowChat(!showChat)} className="fixed bottom-6 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-2xl hover:bg-indigo-700 transition z-50">
+                        <Icon name="message-square" size={28}/>
+                    </button>
+
+                    {/* Chat Window */}
+                    {showChat && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-sm h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+                                <div className="p-4 bg-indigo-600 text-white flex justify-between items-center">
+                                    <h3 className="font-bold flex items-center gap-2"><Icon name="bot" size={20}/> {T.chat_title}</h3>
+                                    <button onClick={() => setShowChat(false)}><Icon name="x"/></button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                                    {chatMessages.length === 0 && <div className="bg-white p-3 rounded-xl rounded-tl-none shadow-sm text-sm text-gray-700">{T.chat_welcome}</div>}
+                                    {chatMessages.map((m, i) => (
+                                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`p-3 rounded-xl max-w-[85%] text-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm rounded-bl-none prose'}`}>
+                                                {m.content}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {chatLoading && <div className="flex justify-start"><div className="bg-gray-200 text-gray-500 text-xs px-3 py-2 rounded-full animate-pulse">Grok is typing...</div></div>}
+                                </div>
+                                <form onSubmit={handleChatSubmit} className="p-3 bg-white border-t flex gap-2">
+                                    <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={T.chat_placeholder} className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"/>
+                                    <button type="submit" disabled={chatLoading} className="bg-indigo-600 text-white p-2 rounded-full disabled:opacity-50"><Icon name="send" size={18}/></button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
