@@ -49,6 +49,16 @@
         }
         .glass-input::placeholder { color: rgba(255, 255, 255, 0.7); }
         .glass-input:focus { background: rgba(255, 255, 255, 0.3); border-color: white; }
+        
+        .sub-card {
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .sub-card:hover { transform: translateY(-2px); }
+        .sub-card.selected {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
     </style>
 </head>
 <body>
@@ -64,7 +74,7 @@
         
         const APP_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E";
 
-        // GOOGLE API (ВАШ КЛЮЧ)
+        // GOOGLE API
         const googleImageApiKey = "AIzaSyCi714-2bhNMqTpG3EKg2wVnvNmedUw_0I"; 
         
         // Contractors
@@ -99,6 +109,16 @@
                 login_submit: "Войти",
                 wrong_pass: "Неверный пароль",
                 
+                // Subscription
+                sub_title: "Выберите тариф",
+                sub_desc: "Для доступа к заданиям необходима подписка",
+                sub_1m: "1 Месяц",
+                sub_3m: "3 Месяца",
+                sub_1y: "1 Год",
+                sub_free: "Пробный период",
+                sub_select: "Выбрать",
+                sub_continue: "Продолжить",
+                
                 // Dash
                 active_tasks: "Нет активных задач",
                 admin_role: "Администратор",
@@ -108,7 +128,7 @@
                 
                 // Analyze
                 analyzing_title: "ИИ анализирует фото...",
-                analyzing_desc: "Проверяем достоверность и категорию",
+                analyzing_desc: "Составляем подробный отчет и проверяем достоверность",
                 skip_btn: "Пропустить и заполнить вручную",
                 fake_detected: "Ошибка: Фото не принято",
                 
@@ -160,6 +180,16 @@
                 login_submit: "Log In",
                 wrong_pass: "Wrong password",
                 
+                // Subscription
+                sub_title: "Choose Subscription",
+                sub_desc: "Subscription required to access tasks",
+                sub_1m: "1 Month",
+                sub_3m: "3 Months",
+                sub_1y: "1 Year",
+                sub_free: "Trial",
+                sub_select: "Select",
+                sub_continue: "Continue",
+                
                 // Dash
                 active_tasks: "No active tasks",
                 admin_role: "Administrator",
@@ -169,7 +199,7 @@
 
                 // Analyze
                 analyzing_title: "AI Analyzing...",
-                analyzing_desc: "Checking validity and category",
+                analyzing_desc: "Generating detailed report and checking validity",
                 skip_btn: "Skip and fill manually",
                 fake_detected: "Error: Photo rejected",
                 
@@ -231,14 +261,14 @@
             return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
-        // --- IMAGE ANALYSIS SERVICE (MULTI-MODEL + ANTI-FAKE) ---
+        // --- IMAGE ANALYSIS SERVICE ---
         const callGeminiImage = async (payload) => {
             const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash-exp", "gemini-1.5-flash-001"];
             let lastError = null;
 
             for (const model of models) {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45s
 
                 try {
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleImageApiKey}`;
@@ -253,12 +283,17 @@
                     if (response.ok) return await response.json();
 
                     const errorText = await response.text();
-                    console.warn(`Model ${model} failed:`, errorText);
                     if (response.status === 403) throw new Error("REFERRER_BLOCKED");
                     lastError = new Error(`Error ${model}: ${response.status}`);
                 } catch (error) {
                     clearTimeout(timeoutId);
                     if (error.message === "REFERRER_BLOCKED") throw error;
+                    // Logging specific errors
+                    if (error.name === 'AbortError') {
+                        console.warn(`Model ${model} timed out (45s).`);
+                    } else {
+                        console.warn(`Model ${model} failed:`, error);
+                    }
                     lastError = error;
                 }
             }
@@ -268,19 +303,21 @@
         const analyzeImage = async (file, lang) => {
             try {
                 const b64 = await fileToBase64(file);
-                // Updated Prompt with Fake Detection
+                // Updated Prompt: Detailed Description & Anti-Fake
                 const prompt = `Analyze this image for a civic issue app. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
                 
                 STEP 1: VALIDITY CHECK
                 Check if this is a real, valid photo of a civic problem (road damage, waste, water leak, broken light).
                 Mark "is_fake": true if:
-                - It is a selfie or portrait of a person.
-                - It is a screenshot, meme, drawing, or document.
-                - It is a photo from a computer screen.
-                - It is completely unrelated to city infrastructure (e.g., a photo of a cat, food, or indoor private room).
+                - It is a selfie, portrait, screenshot, meme, drawing, document, or photo from a screen.
+                - It is unrelated to city infrastructure (e.g., cat, food, indoor room).
                 
-                STEP 2: CATEGORIZATION (Only if valid)
-                If valid, categorize into ["road", "waste", "water", "light", "other"].
+                STEP 2: DETAILED ANALYSIS (Only if valid)
+                If valid, provide a THOROUGH and CLEAR technical description.
+                - Explain exactly what is broken/wrong.
+                - Estimate the scale/size if possible.
+                - Mention potential hazards or safety risks.
+                - Do NOT be brief. Be descriptive and professional.
 
                 Return JSON:
                 {
@@ -288,7 +325,7 @@
                     "fake_reason": "Short reason in ${lang} if fake",
                     "category_id": "road/waste/water/light/other",
                     "type": "Short title in ${lang}",
-                    "description": "Description in ${lang}",
+                    "description": "Detailed description in ${lang} (2-3 sentences minimum)",
                     "importance": "High/Medium/Low"
                 }`;
                 
@@ -297,7 +334,13 @@
                 return JSON.parse(text);
             } catch (e) {
                 console.error("AI Analysis Fail", e);
-                if (e.message === "REFERRER_BLOCKED") alert("⚠️ API Key Error: Referrer blocked. Check Google Cloud Console.");
+                if (e.message === "REFERRER_BLOCKED") {
+                    alert("⚠️ API Key Error: Referrer blocked. Check Google Cloud Console.");
+                } else if (e.name === 'AbortError' || e.message.includes('timed out')) {
+                    alert("⚠️ Time out: Internet is too slow or AI is busy. Please try again.");
+                } else {
+                    alert("⚠️ AI Error: Could not analyze image. Please try again.");
+                }
                 return null;
             }
         };
@@ -328,7 +371,7 @@
             const [isOfflineMode, setIsOfflineMode] = React.useState(false); 
             const [isLocating, setIsLocating] = React.useState(false);
             
-            // User Data Persistence
+            // User Data
             const [userName, setUserName] = React.useState('');
             const [userEmail, setUserEmail] = React.useState('');
             const [userPass, setUserPass] = React.useState('');
@@ -336,7 +379,7 @@
             const [reports, setReports] = React.useState([]);
             const [selectedReport, setSelectedReport] = React.useState(null);
 
-            // Upload & Form Data
+            // Upload & Form
             const [file, setFile] = React.useState(null);
             const [preview, setPreview] = React.useState(null);
             const [analysis, setAnalysis] = React.useState(null);
@@ -344,17 +387,16 @@
             const [address, setAddress] = React.useState('');
             const [isPremium, setIsPremium] = React.useState(false);
 
-            // Auth Data (Staff Login)
+            // Staff Login & Subscription
             const [email, setEmail] = React.useState('');
             const [pass, setPass] = React.useState('');
+            const [selectedPlan, setSelectedPlan] = React.useState(null);
 
             const T = TRANSLATIONS[lang];
 
             // Init
             React.useEffect(() => {
                 document.getElementById('app-loader').style.display = 'none';
-                
-                // Load saved user
                 const savedUser = localStorage.getItem('fixmap_user');
                 if (savedUser) {
                     const parsed = JSON.parse(savedUser);
@@ -362,7 +404,6 @@
                     setUserEmail(parsed.email || '');
                     setUserPass(parsed.pass || '');
                 }
-
                 if (isFirebaseAvailable && auth) {
                     auth.onAuthStateChanged(u => {
                         if (u) setAuthUser(u);
@@ -400,13 +441,7 @@
             };
 
             const startGame = (selectedLang) => {
-                // Ensure all fields are filled
-                if (!userName.trim() || !userEmail.trim() || !userPass.trim()) { 
-                    alert(TRANSLATIONS[selectedLang].reg_error); 
-                    return; 
-                }
-                
-                // Save user info with password
+                if (!userName.trim() || !userEmail.trim() || !userPass.trim()) { alert(TRANSLATIONS[selectedLang].reg_error); return; }
                 localStorage.setItem('fixmap_user', JSON.stringify({ name: userName, email: userEmail, pass: userPass }));
                 setLang(selectedLang);
                 setView('home');
@@ -418,19 +453,8 @@
                     setFile(f);
                     setPreview(URL.createObjectURL(f));
                     setView('analyze');
-                    
                     const res = await analyzeImage(f, lang);
-                    
-                    // Anti-Fake Check
-                    if (res && res.is_fake) {
-                        alert(`❌ ${T.fake_detected}\n\n${res.fake_reason || "Invalid image"}`);
-                        setFile(null);
-                        setPreview(null);
-                        setView('home');
-                        return;
-                    }
-
-                    // Auto-fill user name
+                    if (res && res.is_fake) { alert(`❌ ${T.fake_detected}\n\n${res.fake_reason || "Invalid image"}`); setFile(null); setPreview(null); setView('home'); return; }
                     setFio(userName); 
                     setAnalysis(res || { category_id: 'other', type: "Manual", description: "...", importance: "Low" });
                 }
@@ -455,7 +479,16 @@
 
             const handleLogin = () => {
                 const contractor = CONTRACTORS.find(c => c.email === email);
-                if (contractor && pass === '123') { setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor'); setCurrentUser(contractor); setView('dash'); } else alert(T.wrong_pass);
+                if (contractor && pass === '123') { 
+                    setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor'); 
+                    setCurrentUser(contractor); 
+                    // Redirect Logic
+                    if (contractor.type === 'admin') {
+                        setView('dash');
+                    } else {
+                        setView('subscription'); // Contractor goes to subscription
+                    }
+                } else alert(T.wrong_pass);
             };
 
             // --- VIEWS ---
@@ -465,22 +498,11 @@
                     <div className="min-h-screen flex flex-col items-center justify-center bg-blue-600 text-white p-6 relative overflow-hidden">
                          <img src={APP_LOGO} className="w-24 h-24 mb-6 drop-shadow-2xl relative z-10 animate-bounce rounded-[24px] shadow-lg"/>
                          <h1 className="text-4xl font-extrabold mb-8 relative z-10 tracking-tight">FixMap</h1>
-                         
                          <div className="flex flex-col gap-4 w-full max-w-xs relative z-10 mb-8">
-                             <div>
-                                 <label className="text-xs ml-1 opacity-80 mb-1 block">ФИО / Full Name</label>
-                                 <input value={userName} onChange={e=>setUserName(e.target.value)} className="glass-input" placeholder="Иван Иванов"/>
-                             </div>
-                             <div>
-                                 <label className="text-xs ml-1 opacity-80 mb-1 block">Email</label>
-                                 <input value={userEmail} onChange={e=>setUserEmail(e.target.value)} className="glass-input" placeholder="example@mail.com"/>
-                             </div>
-                             <div>
-                                 <label className="text-xs ml-1 opacity-80 mb-1 block">Пароль / Password</label>
-                                 <input type="password" value={userPass} onChange={e=>setUserPass(e.target.value)} className="glass-input" placeholder="******"/>
-                             </div>
+                             <div><label className="text-xs ml-1 opacity-80 mb-1 block">ФИО / Full Name</label><input value={userName} onChange={e=>setUserName(e.target.value)} className="glass-input" placeholder="Иван Иванов"/></div>
+                             <div><label className="text-xs ml-1 opacity-80 mb-1 block">Email</label><input value={userEmail} onChange={e=>setUserEmail(e.target.value)} className="glass-input" placeholder="example@mail.com"/></div>
+                             <div><label className="text-xs ml-1 opacity-80 mb-1 block">Пароль / Password</label><input type="password" value={userPass} onChange={e=>setUserPass(e.target.value)} className="glass-input" placeholder="******"/></div>
                          </div>
-
                          <div className="flex flex-col gap-3 w-full max-w-xs relative z-10">
                              <button onClick={() => startGame('en')} className="bg-white text-blue-600 font-bold py-3.5 rounded-2xl shadow-lg hover:scale-105 transition flex items-center justify-center gap-3"><span className="text-xl">🇬🇧</span> English</button>
                              <button onClick={() => startGame('ru')} className="bg-white/20 border border-white/40 backdrop-blur-md text-white font-bold py-3.5 rounded-2xl shadow-lg hover:bg-white/30 transition flex items-center justify-center gap-3"><span className="text-xl">🇷🇺</span> Русский</button>
@@ -500,6 +522,46 @@
                             <input value={email} onChange={e=>setEmail(e.target.value)} placeholder={T.email_ph} className="w-full border p-3 rounded-xl mb-3"/>
                             <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={T.pass_ph} className="w-full border p-3 rounded-xl mb-6"/>
                             <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg">{T.login_submit}</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'subscription') {
+                const plans = [
+                    { id: '1m', title: T.sub_1m, price: '$10' },
+                    { id: '3m', title: T.sub_3m, price: '$25' },
+                    { id: '1y', title: T.sub_1y, price: '$90' }
+                ];
+                return (
+                    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+                        <div className="bg-white p-6 rounded-3xl shadow-xl w-full max-w-sm text-center">
+                            <h2 className="text-2xl font-bold mb-2 text-gray-800">{T.sub_title}</h2>
+                            <p className="text-sm text-gray-500 mb-6">{T.sub_desc}</p>
+                            
+                            <div className="space-y-3 mb-6">
+                                {plans.map(p => (
+                                    <div 
+                                        key={p.id}
+                                        onClick={() => setSelectedPlan(p.id)}
+                                        className={`sub-card p-4 rounded-xl cursor-pointer flex justify-between items-center ${selectedPlan === p.id ? 'selected shadow-md' : 'bg-gray-50 border-gray-100'}`}
+                                    >
+                                        <div className="text-left">
+                                            <div className="font-bold text-gray-800">{p.title}</div>
+                                            <div className="text-xs text-gray-500">{T.sub_select}</div>
+                                        </div>
+                                        <div className="font-bold text-blue-600 text-lg">{p.price}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <button 
+                                onClick={() => selectedPlan && setView('dash')} 
+                                disabled={!selectedPlan}
+                                className={`w-full py-4 rounded-xl font-bold transition ${selectedPlan ? 'bg-blue-600 text-white shadow-lg hover:scale-105' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                            >
+                                {T.sub_continue}
+                            </button>
                         </div>
                     </div>
                 );
@@ -530,7 +592,7 @@
                                         </div>
                                         <div className="p-6">
                                             <div className="flex justify-between items-start mb-2"><h2 className="text-xl font-bold">{selectedReport.type}</h2><ImportanceBadge importance={selectedReport.importance}/></div>
-                                            <p className="text-gray-600 mb-6">{selectedReport.description}</p>
+                                            <p className="text-gray-600 mb-6 whitespace-pre-line">{selectedReport.description}</p>
                                             <div className="space-y-3 text-sm text-gray-500 bg-gray-50 p-4 rounded-xl">
                                                 <div className="flex items-center gap-3"><Icon name="map-pin" size={16}/> {selectedReport.address}</div>
                                                 <div className="flex items-center gap-3"><Icon name="user" size={16}/> {selectedReport.fio}</div>
