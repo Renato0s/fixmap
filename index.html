@@ -11,7 +11,7 @@
     <meta name="theme-color" content="#2563eb">
     <meta name="mobile-web-app-capable" content="yes">
     
-    <!-- Favicon (Generated SVG) -->
+    <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E">
 
     <!-- Libraries -->
@@ -36,11 +36,23 @@
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .glass-input {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px;
+            border-radius: 12px;
+            width: 100%;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .glass-input::placeholder { color: rgba(255, 255, 255, 0.7); }
+        .glass-input:focus { background: rgba(255, 255, 255, 0.3); border-color: white; }
     </style>
 </head>
 <body>
     <div id="app-loader">
-        <!-- Loader Logo (SVG) -->
         <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E" class="w-24 h-24 mb-6 shadow-xl rounded-[20px] animate-bounce"/>
         <h2 class="text-xl font-bold text-gray-800">FixMap Loading...</h2>
     </div>
@@ -75,13 +87,17 @@
                 empty_feed: "Лента пуста",
                 offline_mode: "Оффлайн-режим",
                 
+                // Registration
+                reg_name_ph: "Введите ваше ФИО",
+                reg_email_ph: "Ваш Email (для связи)",
+                reg_error: "Пожалуйста, заполните все поля (ФИО, Email, Пароль)",
+
                 // Login
                 login_title: "Вход для сотрудников",
                 email_ph: "Email",
                 pass_ph: "Пароль",
                 login_submit: "Войти",
                 wrong_pass: "Неверный пароль",
-                user_not_found: "Пользователь не найден",
                 
                 // Dash
                 active_tasks: "Нет активных задач",
@@ -90,15 +106,11 @@
                 logout: "Выйти",
                 back_to_list: "Назад к списку",
                 
-                // Status Actions
-                btn_accept: "Принять",
-                btn_work: "В работу",
-                btn_resolve: "Решено",
-                
                 // Analyze
-                analyzing_title: "ИИ ищет подрядчика...",
-                analyzing_desc: "Определяем категорию проблемы",
+                analyzing_title: "ИИ анализирует фото...",
+                analyzing_desc: "Проверяем достоверность и категорию",
                 skip_btn: "Пропустить и заполнить вручную",
+                fake_detected: "Ошибка: Фото не принято",
                 
                 // Form
                 new_report_title: "Новая заявка",
@@ -112,17 +124,20 @@
                 geo_error: "Не удалось получить геопозицию",
                 importance_label: "Важность:",
                 
-                // Importance Levels
+                // Values
                 imp_high: "Высокая",
                 imp_medium: "Средняя",
                 imp_low: "Низкая",
-
-                // Statuses
                 status_new: "Назначена",
                 status_accepted: "Принято",
                 status_work: "В работе",
                 status_done: "Выполнено",
-                status_rejected: "Отклонена"
+                status_rejected: "Отклонена",
+                
+                // Actions
+                btn_accept: "Принять",
+                btn_work: "В работу",
+                btn_resolve: "Решено"
             },
             en: {
                 app_name: "FixMap",
@@ -133,13 +148,17 @@
                 empty_feed: "Feed is empty",
                 offline_mode: "Offline Mode",
                 
+                // Registration
+                reg_name_ph: "Enter your Full Name",
+                reg_email_ph: "Your Email (optional)",
+                reg_error: "Please fill all fields (Name, Email, Password)",
+
                 // Login
                 login_title: "Staff Login",
                 email_ph: "Email",
                 pass_ph: "Password",
                 login_submit: "Log In",
                 wrong_pass: "Wrong password",
-                user_not_found: "User not found",
                 
                 // Dash
                 active_tasks: "No active tasks",
@@ -148,15 +167,11 @@
                 logout: "Log Out",
                 back_to_list: "Back to List",
 
-                // Status Actions
-                btn_accept: "Accept",
-                btn_work: "Start Work",
-                btn_resolve: "Resolved",
-                
                 // Analyze
-                analyzing_title: "AI is assigning contractor...",
-                analyzing_desc: "Identifying category",
+                analyzing_title: "AI Analyzing...",
+                analyzing_desc: "Checking validity and category",
                 skip_btn: "Skip and fill manually",
+                fake_detected: "Error: Photo rejected",
                 
                 // Form
                 new_report_title: "New Report",
@@ -170,17 +185,20 @@
                 geo_error: "Could not get location",
                 importance_label: "Importance:",
 
-                // Importance Levels
+                // Values
                 imp_high: "High",
                 imp_medium: "Medium",
                 imp_low: "Low",
-                
-                // Statuses
                 status_new: "Assigned",
                 status_accepted: "Accepted",
                 status_work: "In Progress",
                 status_done: "Done",
-                status_rejected: "Rejected"
+                status_rejected: "Rejected",
+
+                // Actions
+                btn_accept: "Accept",
+                btn_work: "Start Work",
+                btn_resolve: "Resolved"
             }
         };
 
@@ -213,97 +231,73 @@
             return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
-        // --- IMAGE ANALYSIS SERVICE (MULTI-MODEL RETRY) ---
+        // --- IMAGE ANALYSIS SERVICE (MULTI-MODEL + ANTI-FAKE) ---
         const callGeminiImage = async (payload) => {
-            // Список моделей для перебора (от самой быстрой до экспериментальных)
-            const models = [
-                "gemini-1.5-flash",
-                "gemini-1.5-flash-latest",
-                "gemini-1.5-pro",
-                "gemini-2.0-flash-exp",
-                "gemini-1.5-flash-001"
-            ];
-
+            const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash-exp", "gemini-1.5-flash-001"];
             let lastError = null;
 
-            // Пробуем каждую модель по очереди
             for (const model of models) {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 сек на модель
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
 
                 try {
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleImageApiKey}`;
-                    
                     const response = await fetch(url, { 
                         method: 'POST', 
                         headers: {'Content-Type': 'application/json'}, 
                         body: JSON.stringify(payload),
                         signal: controller.signal
                     });
-                    
                     clearTimeout(timeoutId);
                     
-                    if (response.ok) {
-                        return await response.json(); // Успех!
-                    }
+                    if (response.ok) return await response.json();
 
-                    // Если ошибка, читаем детали
                     const errorText = await response.text();
-                    console.warn(`Модель ${model} не сработала:`, errorText);
-
-                    // Если ошибка 403 (Referrer Blocked) - перебор моделей не поможет, кидаем ошибку сразу
-                    if (response.status === 403) {
-                         try {
-                            const errObj = JSON.parse(errorText);
-                            const details = errObj.error?.details || [];
-                            const isReferrerBlocked = details.some(d => d.reason === "API_KEY_HTTP_REFERRER_BLOCKED") || errObj.error?.message?.includes("blocked");
-                            if (isReferrerBlocked) throw new Error("REFERRER_BLOCKED");
-                         } catch(e) { 
-                            if (e.message === "REFERRER_BLOCKED") throw e; 
-                         }
-                    }
-
-                    // Сохраняем ошибку и пробуем следующую модель
-                    lastError = new Error(`Ошибка модели ${model}: ${response.status}`);
-
+                    console.warn(`Model ${model} failed:`, errorText);
+                    if (response.status === 403) throw new Error("REFERRER_BLOCKED");
+                    lastError = new Error(`Error ${model}: ${response.status}`);
                 } catch (error) {
                     clearTimeout(timeoutId);
-                    if (error.message === "REFERRER_BLOCKED") throw error; // Не продолжать перебор
-                    console.warn(`Сбой сети/таймаут модели ${model}:`, error);
+                    if (error.message === "REFERRER_BLOCKED") throw error;
                     lastError = error;
                 }
             }
-            
-            // Если ни одна модель не сработала
-            throw lastError || new Error("Все модели недоступны");
+            throw lastError || new Error("All models failed");
         };
 
         const analyzeImage = async (file, lang) => {
             try {
                 const b64 = await fileToBase64(file);
-                const prompt = `Analyze this civic issue. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
-                Return JSON with fields:
-                1. "category_id": MUST be one of ["road", "waste", "water", "light", "other"].
-                2. "type": Short title in ${lang}.
-                3. "description": Description in ${lang}.
-                4. "importance": "High", "Medium", or "Low" based on urgency/danger.
-                Example JSON: { "category_id": "road", "type": "Pothole", "description": "Big hole", "importance": "High" }`;
+                // Updated Prompt with Fake Detection
+                const prompt = `Analyze this image for a civic issue app. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
+                
+                STEP 1: VALIDITY CHECK
+                Check if this is a real, valid photo of a civic problem (road damage, waste, water leak, broken light).
+                Mark "is_fake": true if:
+                - It is a selfie or portrait of a person.
+                - It is a screenshot, meme, drawing, or document.
+                - It is a photo from a computer screen.
+                - It is completely unrelated to city infrastructure (e.g., a photo of a cat, food, or indoor private room).
+                
+                STEP 2: CATEGORIZATION (Only if valid)
+                If valid, categorize into ["road", "waste", "water", "light", "other"].
+
+                Return JSON:
+                {
+                    "is_fake": boolean,
+                    "fake_reason": "Short reason in ${lang} if fake",
+                    "category_id": "road/waste/water/light/other",
+                    "type": "Short title in ${lang}",
+                    "description": "Description in ${lang}",
+                    "importance": "High/Medium/Low"
+                }`;
                 
                 const data = await callGeminiImage({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: b64 } }] }] });
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (e) {
-                console.error("AI Analysis Global Fail", e);
-                
-                if (e.message === "REFERRER_BLOCKED") {
-                    alert("⚠️ ОШИБКА ДОСТУПА (403)\n\nВаш API ключ ограничен. В Google Cloud Console > Credentials разрешите домен '*googleusercontent.com/*' или поставьте 'None'.");
-                } else if (e.message.includes("404")) {
-                     // Этого быть не должно при переборе, но если вдруг
-                     alert("Ошибка API: Модели не найдены. Проверьте, включен ли 'Generative Language API' в Google Cloud Console.");
-                } else {
-                     alert("Не удалось связаться с ИИ. Проверьте API ключ и баланс.");
-                }
-                
+                console.error("AI Analysis Fail", e);
+                if (e.message === "REFERRER_BLOCKED") alert("⚠️ API Key Error: Referrer blocked. Check Google Cloud Console.");
                 return null;
             }
         };
@@ -334,9 +328,12 @@
             const [isOfflineMode, setIsOfflineMode] = React.useState(false); 
             const [isLocating, setIsLocating] = React.useState(false);
             
-            const [reports, setReports] = React.useState([]);
+            // User Data Persistence
+            const [userName, setUserName] = React.useState('');
+            const [userEmail, setUserEmail] = React.useState('');
+            const [userPass, setUserPass] = React.useState('');
             
-            // Contractor Dash State
+            const [reports, setReports] = React.useState([]);
             const [selectedReport, setSelectedReport] = React.useState(null);
 
             // Upload & Form Data
@@ -347,7 +344,7 @@
             const [address, setAddress] = React.useState('');
             const [isPremium, setIsPremium] = React.useState(false);
 
-            // Auth Data
+            // Auth Data (Staff Login)
             const [email, setEmail] = React.useState('');
             const [pass, setPass] = React.useState('');
 
@@ -356,6 +353,16 @@
             // Init
             React.useEffect(() => {
                 document.getElementById('app-loader').style.display = 'none';
+                
+                // Load saved user
+                const savedUser = localStorage.getItem('fixmap_user');
+                if (savedUser) {
+                    const parsed = JSON.parse(savedUser);
+                    setUserName(parsed.name || '');
+                    setUserEmail(parsed.email || '');
+                    setUserPass(parsed.pass || '');
+                }
+
                 if (isFirebaseAvailable && auth) {
                     auth.onAuthStateChanged(u => {
                         if (u) setAuthUser(u);
@@ -379,71 +386,31 @@
                 }
             }, [authUser, isOfflineMode]);
 
-            // --- HELPERS & HANDLERS ---
+            // --- HELPERS ---
             const findContractor = (catId) => CONTRACTORS.find(c => c.type === catId) || CONTRACTORS.find(c => c.type === 'admin');
-
-            const translateStatus = (status) => {
-                const map = { 
-                    'Назначена': T.status_new, 
-                    'Принято': T.status_accepted, 
-                    'В работе': T.status_work, 
-                    'Выполнено': T.status_done, 
-                    'Отклонена': T.status_rejected 
-                };
-                return map[status] || status;
-            };
-
-            const translateImportance = (imp) => {
-                if (!imp) return T.imp_low;
-                if (imp === 'High') return T.imp_high;
-                if (imp === 'Medium') return T.imp_medium;
-                return T.imp_low;
-            };
-
-            const StatusBadge = ({ status }) => {
-                const colors = { 
-                    'Назначена': 'bg-blue-100 text-blue-700', 
-                    'Принято': 'bg-purple-100 text-purple-700',
-                    'В работе': 'bg-yellow-100 text-yellow-700', 
-                    'Выполнено': 'bg-green-100 text-green-700', 
-                    'Отклонена': 'bg-red-100 text-red-700' 
-                };
-                return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors[status] || 'bg-gray-100'}`}>{translateStatus(status)}</span>;
-            };
-
-            const ImportanceBadge = ({ importance }) => {
-                const colors = { 
-                    'High': 'bg-red-100 text-red-700 border-red-200', 
-                    'Medium': 'bg-orange-100 text-orange-700 border-orange-200', 
-                    'Low': 'bg-green-100 text-green-700 border-green-200' 
-                };
-                return (
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded border ${colors[importance] || colors['Low']}`}>
-                        {translateImportance(importance)}
-                    </span>
-                );
-            };
+            const translateStatus = (status) => { const map = { 'Назначена': T.status_new, 'Принято': T.status_accepted, 'В работе': T.status_work, 'Выполнено': T.status_done, 'Отклонена': T.status_rejected }; return map[status] || status; };
+            const translateImportance = (imp) => { if (!imp) return T.imp_low; if (imp === 'High') return T.imp_high; if (imp === 'Medium') return T.imp_medium; return T.imp_low; };
+            const StatusBadge = ({ status }) => { const colors = { 'Назначена': 'bg-blue-100 text-blue-700', 'Принято': 'bg-purple-100 text-purple-700', 'В работе': 'bg-yellow-100 text-yellow-700', 'Выполнено': 'bg-green-100 text-green-700', 'Отклонена': 'bg-red-100 text-red-700' }; return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors[status] || 'bg-gray-100'}`}>{translateStatus(status)}</span>; };
+            const ImportanceBadge = ({ importance }) => { const colors = { 'High': 'bg-red-100 text-red-700 border-red-200', 'Medium': 'bg-orange-100 text-orange-700 border-orange-200', 'Low': 'bg-green-100 text-green-700 border-green-200' }; return (<span className={`text-[10px] font-bold px-2 py-1 rounded border ${colors[importance] || colors['Low']}`}>{translateImportance(importance)}</span>); };
 
             const updateReportStatus = async (reportId, newStatus) => {
-                // Update local state first for immediate feedback
                 setReports(prev => prev.map(r => r.id === reportId ? {...r, status: newStatus} : r));
-                if (selectedReport && selectedReport.id === reportId) {
-                    setSelectedReport(prev => ({...prev, status: newStatus}));
-                }
-
-                if (isFirebaseAvailable && db && !isOfflineMode) {
-                    try {
-                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').doc(reportId).update({
-                            status: newStatus
-                        });
-                    } catch (e) {
-                        console.error("Status update failed", e);
-                        alert("Error updating status online");
-                    }
-                }
+                if (selectedReport && selectedReport.id === reportId) setSelectedReport(prev => ({...prev, status: newStatus}));
+                if (isFirebaseAvailable && db && !isOfflineMode) { try { await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').doc(reportId).update({ status: newStatus }); } catch (e) { alert("Error updating status online"); } }
             };
 
-            const selectLanguage = (l) => { setLang(l); setView('home'); };
+            const startGame = (selectedLang) => {
+                // Ensure all fields are filled
+                if (!userName.trim() || !userEmail.trim() || !userPass.trim()) { 
+                    alert(TRANSLATIONS[selectedLang].reg_error); 
+                    return; 
+                }
+                
+                // Save user info with password
+                localStorage.setItem('fixmap_user', JSON.stringify({ name: userName, email: userEmail, pass: userPass }));
+                setLang(selectedLang);
+                setView('home');
+            };
 
             const handleFile = async (e) => {
                 if (e.target.files?.[0]) {
@@ -451,7 +418,20 @@
                     setFile(f);
                     setPreview(URL.createObjectURL(f));
                     setView('analyze');
+                    
                     const res = await analyzeImage(f, lang);
+                    
+                    // Anti-Fake Check
+                    if (res && res.is_fake) {
+                        alert(`❌ ${T.fake_detected}\n\n${res.fake_reason || "Invalid image"}`);
+                        setFile(null);
+                        setPreview(null);
+                        setView('home');
+                        return;
+                    }
+
+                    // Auto-fill user name
+                    setFio(userName); 
                     setAnalysis(res || { category_id: 'other', type: "Manual", description: "...", importance: "Low" });
                 }
             };
@@ -461,47 +441,21 @@
                 setIsLocating(true);
                 navigator.geolocation.getCurrentPosition(
                     (p) => { setAddress(`${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`); setIsLocating(false); },
-                    (e) => { 
-                         // Check for specific error code (1 = Permission Denied)
-                         if (e.code === 1) {
-                            alert("Включите GPS!"); // Fallback alert but better UX would be inline
-                         } else {
-                            alert(T.geo_error); 
-                         }
-                         setIsLocating(false); 
-                    }
+                    (e) => { if (e.code === 1) alert("Включите GPS!"); else alert(T.geo_error); setIsLocating(false); }
                 );
             };
 
             const submitReport = async () => {
                 const assigned = findContractor(analysis.category_id);
-                const newReport = {
-                    ...analysis,
-                    fio: fio || 'Anon',
-                    address: address || 'No address',
-                    isPremium,
-                    photoBefore: preview,
-                    contractorId: assigned?.id || 'admin',
-                    contractorName: assigned?.name || 'Admin',
-                    status: 'Назначена',
-                    createdAt: new Date(),
-                    id: Date.now().toString()
-                };
+                const newReport = { ...analysis, fio: fio || userName || 'Anon', email: userEmail, address: address || 'No address', isPremium, photoBefore: preview, contractorId: assigned?.id || 'admin', contractorName: assigned?.name || 'Admin', status: 'Назначена', createdAt: new Date(), id: Date.now().toString() };
                 setReports([newReport, ...reports]);
-                if (isFirebaseAvailable && db && !isOfflineMode) {
-                    try { await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({ ...newReport, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); } 
-                    catch(e) { setIsOfflineMode(true); }
-                }
-                setFile(null); setAnalysis(null); setFio(''); setAddress(''); setIsPremium(false); setView('home');
+                if (isFirebaseAvailable && db && !isOfflineMode) { try { await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({ ...newReport, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); } catch(e) { setIsOfflineMode(true); } }
+                setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
 
             const handleLogin = () => {
                 const contractor = CONTRACTORS.find(c => c.email === email);
-                if (contractor && pass === '123') {
-                    setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor');
-                    setCurrentUser(contractor);
-                    setView('dash');
-                } else alert(T.wrong_pass);
+                if (contractor && pass === '123') { setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor'); setCurrentUser(contractor); setView('dash'); } else alert(T.wrong_pass);
             };
 
             // --- VIEWS ---
@@ -509,11 +463,27 @@
             if (view === 'lang_select') {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-blue-600 text-white p-6 relative overflow-hidden">
-                         <img src={APP_LOGO} className="w-32 h-32 mb-8 drop-shadow-2xl relative z-10 animate-bounce rounded-[24px] shadow-lg"/>
-                         <h1 className="text-5xl font-extrabold mb-12 relative z-10 tracking-tight">FixMap</h1>
-                         <div className="flex flex-col gap-4 w-full max-w-xs relative z-10">
-                             <button onClick={() => selectLanguage('en')} className="bg-white text-blue-600 font-bold py-4 rounded-2xl shadow-lg hover:scale-105 transition flex items-center justify-center gap-3"><span className="text-2xl">🇬🇧</span> English</button>
-                             <button onClick={() => selectLanguage('ru')} className="bg-white/20 border border-white/40 backdrop-blur-md text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-white/30 transition flex items-center justify-center gap-3"><span className="text-2xl">🇷🇺</span> Русский</button>
+                         <img src={APP_LOGO} className="w-24 h-24 mb-6 drop-shadow-2xl relative z-10 animate-bounce rounded-[24px] shadow-lg"/>
+                         <h1 className="text-4xl font-extrabold mb-8 relative z-10 tracking-tight">FixMap</h1>
+                         
+                         <div className="flex flex-col gap-4 w-full max-w-xs relative z-10 mb-8">
+                             <div>
+                                 <label className="text-xs ml-1 opacity-80 mb-1 block">ФИО / Full Name</label>
+                                 <input value={userName} onChange={e=>setUserName(e.target.value)} className="glass-input" placeholder="Иван Иванов"/>
+                             </div>
+                             <div>
+                                 <label className="text-xs ml-1 opacity-80 mb-1 block">Email</label>
+                                 <input value={userEmail} onChange={e=>setUserEmail(e.target.value)} className="glass-input" placeholder="example@mail.com"/>
+                             </div>
+                             <div>
+                                 <label className="text-xs ml-1 opacity-80 mb-1 block">Пароль / Password</label>
+                                 <input type="password" value={userPass} onChange={e=>setUserPass(e.target.value)} className="glass-input" placeholder="******"/>
+                             </div>
+                         </div>
+
+                         <div className="flex flex-col gap-3 w-full max-w-xs relative z-10">
+                             <button onClick={() => startGame('en')} className="bg-white text-blue-600 font-bold py-3.5 rounded-2xl shadow-lg hover:scale-105 transition flex items-center justify-center gap-3"><span className="text-xl">🇬🇧</span> English</button>
+                             <button onClick={() => startGame('ru')} className="bg-white/20 border border-white/40 backdrop-blur-md text-white font-bold py-3.5 rounded-2xl shadow-lg hover:bg-white/30 transition flex items-center justify-center gap-3"><span className="text-xl">🇷🇺</span> Русский</button>
                          </div>
                     </div>
                 );
@@ -536,92 +506,56 @@
             }
 
             if (view === 'dash') {
-                // Determine which reports to show
                 const myReports = userRole === 'admin' ? reports : reports.filter(r => r.contractorId === currentUser.id);
                 const sorted = [...myReports].sort((a, b) => (b.isPremium === a.isPremium) ? 0 : b.isPremium ? 1 : -1);
 
                 return (
                     <div className="min-h-screen bg-gray-50 flex flex-col">
-                        {/* Header */}
                         <div className="bg-white border-b p-4 sticky top-0 z-20 shadow-sm flex justify-between items-center">
                             {selectedReport ? (
-                                <button onClick={() => setSelectedReport(null)} className="flex items-center gap-1 text-blue-600 font-bold">
-                                    <Icon name="arrow-left" size={18}/> {T.back_to_list}
-                                </button>
+                                <button onClick={() => setSelectedReport(null)} className="flex items-center gap-1 text-blue-600 font-bold"><Icon name="arrow-left" size={18}/> {T.back_to_list}</button>
                             ) : (
-                                <div>
-                                    <h2 className="font-bold text-gray-800">{currentUser.name}</h2>
-                                    <div className="text-xs text-gray-500">{userRole === 'admin' ? T.admin_role : T.contractor_role}</div>
-                                </div>
+                                <div><h2 className="font-bold text-gray-800">{currentUser.name}</h2><div className="text-xs text-gray-500">{userRole === 'admin' ? T.admin_role : T.contractor_role}</div></div>
                             )}
                             <button onClick={() => { setSelectedReport(null); setView('home'); }} className="text-red-500 text-xs bg-red-50 px-3 py-1 rounded-lg font-bold">{T.logout}</button>
                         </div>
-
-                        {/* Content Area */}
                         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                            {/* IF SELECTED: Show Details & Actions */}
                             {selectedReport ? (
                                 <div className="space-y-4">
                                     <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
                                         <div className="relative h-64 bg-gray-200">
                                             <img src={selectedReport.photoBefore} className="w-full h-full object-cover"/>
                                             {selectedReport.isPremium && <div className="absolute top-4 right-4 bg-yellow-400 text-yellow-900 font-bold px-3 py-1 rounded-full text-xs shadow-md">🔥 PREMIUM</div>}
-                                            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-sm font-bold shadow-sm">
-                                                <StatusBadge status={selectedReport.status}/>
-                                            </div>
+                                            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-sm font-bold shadow-sm"><StatusBadge status={selectedReport.status}/></div>
                                         </div>
                                         <div className="p-6">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h2 className="text-xl font-bold">{selectedReport.type}</h2>
-                                                <ImportanceBadge importance={selectedReport.importance}/>
-                                            </div>
+                                            <div className="flex justify-between items-start mb-2"><h2 className="text-xl font-bold">{selectedReport.type}</h2><ImportanceBadge importance={selectedReport.importance}/></div>
                                             <p className="text-gray-600 mb-6">{selectedReport.description}</p>
-                                            
                                             <div className="space-y-3 text-sm text-gray-500 bg-gray-50 p-4 rounded-xl">
                                                 <div className="flex items-center gap-3"><Icon name="map-pin" size={16}/> {selectedReport.address}</div>
                                                 <div className="flex items-center gap-3"><Icon name="user" size={16}/> {selectedReport.fio}</div>
+                                                <div className="flex items-center gap-3"><Icon name="mail" size={16}/> {selectedReport.email || '-'}</div>
                                                 <div className="flex items-center gap-3"><Icon name="calendar" size={16}/> {formatDate(selectedReport.createdAt, lang)}</div>
                                             </div>
                                         </div>
-                                        
-                                        {/* ACTION BUTTONS */}
                                         <div className="p-4 bg-gray-50 border-t flex flex-col gap-3">
                                             <div className="grid grid-cols-3 gap-2">
-                                                <button 
-                                                    onClick={() => updateReportStatus(selectedReport.id, "Принято")}
-                                                    className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'Принято' ? 'bg-purple-600 text-white shadow-md' : 'bg-white border hover:bg-purple-50 text-gray-700'}`}>
-                                                    <Icon name="check-circle" size={18}/> {T.btn_accept}
-                                                </button>
-                                                <button 
-                                                    onClick={() => updateReportStatus(selectedReport.id, "В работе")}
-                                                    className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'В работе' ? 'bg-yellow-500 text-white shadow-md' : 'bg-white border hover:bg-yellow-50 text-gray-700'}`}>
-                                                    <Icon name="hammer" size={18}/> {T.btn_work}
-                                                </button>
-                                                <button 
-                                                    onClick={() => updateReportStatus(selectedReport.id, "Выполнено")}
-                                                    className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'Выполнено' ? 'bg-green-600 text-white shadow-md' : 'bg-white border hover:bg-green-50 text-gray-700'}`}>
-                                                    <Icon name="check-check" size={18}/> {T.btn_resolve}
-                                                </button>
+                                                <button onClick={() => updateReportStatus(selectedReport.id, "Принято")} className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'Принято' ? 'bg-purple-600 text-white shadow-md' : 'bg-white border hover:bg-purple-50 text-gray-700'}`}><Icon name="check-circle" size={18}/> {T.btn_accept}</button>
+                                                <button onClick={() => updateReportStatus(selectedReport.id, "В работе")} className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'В работе' ? 'bg-yellow-500 text-white shadow-md' : 'bg-white border hover:bg-yellow-50 text-gray-700'}`}><Icon name="hammer" size={18}/> {T.btn_work}</button>
+                                                <button onClick={() => updateReportStatus(selectedReport.id, "Выполнено")} className={`py-3 rounded-lg font-bold text-sm flex flex-col items-center gap-1 transition ${selectedReport.status === 'Выполнено' ? 'bg-green-600 text-white shadow-md' : 'bg-white border hover:bg-green-50 text-gray-700'}`}><Icon name="check-check" size={18}/> {T.btn_resolve}</button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                /* ELSE: Show List */
                                 <>
                                     {sorted.length === 0 && <div className="text-center text-gray-400 mt-10">{T.active_tasks}</div>}
                                     {sorted.map(r => (
-                                        <div 
-                                            key={r.id} 
-                                            onClick={() => setSelectedReport(r)}
-                                            className={`bg-white rounded-xl overflow-hidden shadow-sm border cursor-pointer hover:shadow-md transition active:scale-95 ${r.isPremium ? 'border-yellow-400 ring-1 ring-yellow-100' : 'border-gray-200'}`}>
+                                        <div key={r.id} onClick={() => setSelectedReport(r)} className={`bg-white rounded-xl overflow-hidden shadow-sm border cursor-pointer hover:shadow-md transition active:scale-95 ${r.isPremium ? 'border-yellow-400 ring-1 ring-yellow-100' : 'border-gray-200'}`}>
                                             {r.isPremium && <div className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 text-center">🔥 PREMIUM</div>}
                                             <div className="p-4">
                                                 <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex gap-2 items-center">
-                                                        <StatusBadge status={r.status} />
-                                                        <ImportanceBadge importance={r.importance} />
-                                                    </div>
+                                                    <div className="flex gap-2 items-center"><StatusBadge status={r.status} /><ImportanceBadge importance={r.importance} /></div>
                                                     <span className="text-xs text-gray-400">{formatDate(r.createdAt, lang)}</span>
                                                 </div>
                                                 <div className="flex gap-3 mb-3">
@@ -647,6 +581,7 @@
                         <div className="relative z-10 text-center text-white px-6">
                             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"/>
                             <h2 className="text-xl font-bold">{T.analyzing_title}</h2>
+                            <p className="text-sm opacity-80 mt-2">{T.analyzing_desc}</p>
                             <button onClick={() => setAnalysis({category_id: 'other', type: 'Manual', description: '...'})} className="mt-8 bg-white/10 px-4 py-2 rounded-full text-xs">{T.skip_btn}</button>
                         </div>
                     </div>
@@ -661,12 +596,7 @@
                         <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                                 <div className="flex gap-3 mb-4"><img src={preview} className="w-20 h-20 rounded-lg object-cover bg-gray-100"/><div><h3 className="font-bold text-sm">{analysis.type}</h3><p className="text-xs text-gray-500 mt-1">{analysis.description}</p></div></div>
-                                
-                                <div className="mb-4 flex items-center justify-between">
-                                    <span className="text-sm font-bold text-gray-700">{T.importance_label}</span>
-                                    <ImportanceBadge importance={analysis.importance}/>
-                                </div>
-                                
+                                <div className="mb-4 flex items-center justify-between"><span className="text-sm font-bold text-gray-700">{T.importance_label}</span><ImportanceBadge importance={analysis.importance}/></div>
                                 <div className="bg-gray-50 p-3 rounded-lg flex items-center justify-between border"><span className="text-xs text-gray-500">{T.assigned_to}</span><span className="text-xs font-bold text-gray-800 flex items-center gap-1"><Icon name="hard-hat" size={14} className="text-orange-500"/> {assigned?.name || 'Admin'}</span></div>
                             </div>
                             <div className="space-y-3">
@@ -691,9 +621,7 @@
                 <div className="min-h-screen bg-gray-50 pb-20 relative">
                     <div className="bg-blue-600 text-white p-6 rounded-b-[30px] shadow-xl">
                         <div className="flex justify-between items-center mb-6">
-                            <h1 className="text-2xl font-bold flex items-center gap-2">
-                                <img src={APP_LOGO} className="w-8 h-8 rounded-full bg-white"/> {T.app_name}
-                            </h1>
+                            <h1 className="text-2xl font-bold flex items-center gap-2"><img src={APP_LOGO} className="w-8 h-8 rounded-full bg-white"/> {T.app_name}</h1>
                             <div className="flex gap-2">
                                 <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 w-8 h-8 rounded-full flex items-center justify-center font-bold">{lang === 'en' ? 'EN' : 'RU'}</button>
                                 <button onClick={() => setView('login')} className="text-xs bg-white/20 px-3 py-1 rounded-full">{T.staff_login_btn}</button>
@@ -707,7 +635,6 @@
                             </label>
                         </div>
                     </div>
-
                     <div className="p-4">
                         <div className="flex justify-between items-center mb-4 px-2">
                             <h2 className="font-bold text-gray-800">{T.feed_title}</h2>
@@ -718,13 +645,7 @@
                                 <div className="flex gap-3">
                                     <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0"><Icon name={r.category_id === 'road' ? 'road' : r.category_id === 'waste' ? 'trash-2' : 'alert-circle'} size={20}/></div>
                                     <div className="flex-1">
-                                        <div className="flex justify-between mb-1">
-                                            <h3 className="font-bold text-sm">{r.type}</h3>
-                                            <div className="flex gap-1">
-                                                 <StatusBadge status={r.status}/>
-                                                 <ImportanceBadge importance={r.importance}/>
-                                            </div>
-                                        </div>
+                                        <div className="flex justify-between mb-1"><h3 className="font-bold text-sm">{r.type}</h3><div className="flex gap-1"><StatusBadge status={r.status}/><ImportanceBadge importance={r.importance}/></div></div>
                                         <p className="text-xs text-gray-500 line-clamp-2">{r.description}</p>
                                     </div>
                                 </div>
