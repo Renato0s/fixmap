@@ -50,11 +50,10 @@
     <script type="text/babel">
         // --- API & CONFIG ---
         
-        // 🔹 ВАШ ЛОГОТИП (Встроенный SVG)
         const APP_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E";
 
-        // GOOGLE API
-        const googleImageApiKey = "AIzaSyAena0EsktAw7VDA6NPTh4E7_BrULQKI4M"; 
+        // GOOGLE API (ВАШ КЛЮЧ)
+        const googleImageApiKey = "AIzaSyCi714-2bhNMqTpG3EKg2wVnvNmedUw_0I"; 
         
         // Contractors
         const CONTRACTORS = [
@@ -214,31 +213,69 @@
             return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
-        // --- IMAGE ANALYSIS SERVICE (GOOGLE GEMINI DIRECT) ---
+        // --- IMAGE ANALYSIS SERVICE (MULTI-MODEL RETRY) ---
         const callGeminiImage = async (payload) => {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); 
+            // Список моделей для перебора (от самой быстрой до экспериментальных)
+            const models = [
+                "gemini-1.5-flash",
+                "gemini-1.5-flash-latest",
+                "gemini-1.5-pro",
+                "gemini-2.0-flash-exp",
+                "gemini-1.5-flash-001"
+            ];
 
-            try {
-                // Используем ваш ключ
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${googleImageApiKey}`;
-                const response = await fetch(url, { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify(payload),
-                    signal: controller.signal 
-                });
-                clearTimeout(timeoutId);
-                if (!response.ok) {
+            let lastError = null;
+
+            // Пробуем каждую модель по очереди
+            for (const model of models) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 сек на модель
+
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleImageApiKey}`;
+                    
+                    const response = await fetch(url, { 
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify(payload),
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        return await response.json(); // Успех!
+                    }
+
+                    // Если ошибка, читаем детали
                     const errorText = await response.text();
-                    console.error("Image Analysis API Error:", errorText);
-                    throw new Error("API Error");
+                    console.warn(`Модель ${model} не сработала:`, errorText);
+
+                    // Если ошибка 403 (Referrer Blocked) - перебор моделей не поможет, кидаем ошибку сразу
+                    if (response.status === 403) {
+                         try {
+                            const errObj = JSON.parse(errorText);
+                            const details = errObj.error?.details || [];
+                            const isReferrerBlocked = details.some(d => d.reason === "API_KEY_HTTP_REFERRER_BLOCKED") || errObj.error?.message?.includes("blocked");
+                            if (isReferrerBlocked) throw new Error("REFERRER_BLOCKED");
+                         } catch(e) { 
+                            if (e.message === "REFERRER_BLOCKED") throw e; 
+                         }
+                    }
+
+                    // Сохраняем ошибку и пробуем следующую модель
+                    lastError = new Error(`Ошибка модели ${model}: ${response.status}`);
+
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    if (error.message === "REFERRER_BLOCKED") throw error; // Не продолжать перебор
+                    console.warn(`Сбой сети/таймаут модели ${model}:`, error);
+                    lastError = error;
                 }
-                return await response.json();
-            } catch (error) {
-                clearTimeout(timeoutId);
-                throw error;
             }
+            
+            // Если ни одна модель не сработала
+            throw lastError || new Error("Все модели недоступны");
         };
 
         const analyzeImage = async (file, lang) => {
@@ -256,7 +293,17 @@
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (e) {
-                console.warn("AI Fail or Timeout", e);
+                console.error("AI Analysis Global Fail", e);
+                
+                if (e.message === "REFERRER_BLOCKED") {
+                    alert("⚠️ ОШИБКА ДОСТУПА (403)\n\nВаш API ключ ограничен. В Google Cloud Console > Credentials разрешите домен '*googleusercontent.com/*' или поставьте 'None'.");
+                } else if (e.message.includes("404")) {
+                     // Этого быть не должно при переборе, но если вдруг
+                     alert("Ошибка API: Модели не найдены. Проверьте, включен ли 'Generative Language API' в Google Cloud Console.");
+                } else {
+                     alert("Не удалось связаться с ИИ. Проверьте API ключ и баланс.");
+                }
+                
                 return null;
             }
         };
@@ -414,7 +461,15 @@
                 setIsLocating(true);
                 navigator.geolocation.getCurrentPosition(
                     (p) => { setAddress(`${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`); setIsLocating(false); },
-                    () => { alert(T.geo_error); setIsLocating(false); }
+                    (e) => { 
+                         // Check for specific error code (1 = Permission Denied)
+                         if (e.code === 1) {
+                            alert("Включите GPS!"); // Fallback alert but better UX would be inline
+                         } else {
+                            alert(T.geo_error); 
+                         }
+                         setIsLocating(false); 
+                    }
                 );
             };
 
@@ -588,6 +643,7 @@
                 return (
                     <div className="h-screen bg-gray-900 flex flex-col items-center justify-center relative">
                         <img src={preview} className="absolute inset-0 w-full h-full object-cover opacity-50"/>
+                        <div className="scan-line"></div>
                         <div className="relative z-10 text-center text-white px-6">
                             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"/>
                             <h2 className="text-xl font-bold">{T.analyzing_title}</h2>
