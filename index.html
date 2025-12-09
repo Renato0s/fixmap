@@ -138,7 +138,7 @@
                 
                 // Analyze
                 analyzing_title: "ИИ анализирует фото...",
-                analyzing_desc: "Составляем подробный отчет и проверяем достоверность",
+                analyzing_desc: "Сжимаем изображение и ускоряем анализ...",
                 skip_btn: "Пропустить и заполнить вручную",
                 fake_detected: "Ошибка: Фото не принято",
                 
@@ -210,7 +210,7 @@
 
                 // Analyze
                 analyzing_title: "AI Analyzing...",
-                analyzing_desc: "Generating detailed report and checking validity",
+                analyzing_desc: "Compressing image for speed...",
                 skip_btn: "Skip and fill manually",
                 fake_detected: "Error: Photo rejected",
                 
@@ -259,11 +259,31 @@
             }
         } catch (e) { console.error("Firebase error", e); }
 
-        // --- UTILS ---
-        const fileToBase64 = (file) => new Promise((resolve) => {
+        // --- UTILS (OPTIMIZED) ---
+        
+        // NEW: Fast Image Compression
+        const compressImage = (file) => new Promise((resolve) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result.toString().replace(/^data:(.*,)?/, ''));
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    // Resize to max 800px width - plenty for AI but small file size
+                    const MAX_WIDTH = 800; 
+                    const scaleSize = MAX_WIDTH / img.width;
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = img.height * scaleSize;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // Compress to JPEG 0.7 quality
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(dataUrl.split(',')[1]); // Return base64 part only
+                }
+            };
         });
 
         const formatDate = (d, lang) => {
@@ -282,40 +302,31 @@
 
         const calculateStreak = (currentStreakData) => {
             const now = new Date();
-            // Use toDateString for easy day comparison (ignoring time)
             const todayStr = now.toDateString();
             let { count, lastDate } = currentStreakData;
 
-            if (!lastDate) {
-                // First submission ever
-                return { count: 1, lastDate: todayStr };
-            }
-
-            if (lastDate === todayStr) {
-                // Already submitted today, keep streak same
-                return { count, lastDate };
-            }
+            if (!lastDate) return { count: 1, lastDate: todayStr };
+            if (lastDate === todayStr) return { count, lastDate };
 
             const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
             
             if (lastDate === yesterday.toDateString()) {
-                // Submitted yesterday, increment
                 return { count: count + 1, lastDate: todayStr };
             } else {
-                // Broken streak, reset to 1
                 return { count: 1, lastDate: todayStr };
             }
         };
 
-        // --- IMAGE ANALYSIS SERVICE ---
+        // --- IMAGE ANALYSIS SERVICE (OPTIMIZED) ---
         const callGeminiImage = async (payload) => {
-            const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash-exp", "gemini-1.5-flash-001"];
+            // Prioritize FLASH model for speed
+            const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash-exp"];
             let lastError = null;
 
             for (const model of models) {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 45000); 
+                const timeoutId = setTimeout(() => controller.abort(), 30000); 
 
                 try {
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleImageApiKey}`;
@@ -335,11 +346,7 @@
                 } catch (error) {
                     clearTimeout(timeoutId);
                     if (error.message === "REFERRER_BLOCKED") throw error;
-                    if (error.name === 'AbortError') {
-                        console.warn(`Model ${model} timed out (45s).`);
-                    } else {
-                        console.warn(`Model ${model} failed:`, error);
-                    }
+                    console.warn(`Model ${model} failed/timeout:`, error);
                     lastError = error;
                 }
             }
@@ -348,7 +355,9 @@
 
         const analyzeImage = async (file, lang) => {
             try {
-                const b64 = await fileToBase64(file);
+                // USE COMPRESSED IMAGE
+                const b64 = await compressImage(file);
+                
                 const prompt = `Analyze this image for a civic issue app. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
                 
                 STEP 1: VALIDITY CHECK
@@ -374,7 +383,7 @@
                     "importance": "High/Medium/Low"
                 }`;
                 
-                const data = await callGeminiImage({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: b64 } }] }] });
+                const data = await callGeminiImage({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: b64 } }] }] });
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (e) {
@@ -382,7 +391,7 @@
                 if (e.message === "REFERRER_BLOCKED") {
                     alert("⚠️ API Key Error: Referrer blocked. Check Google Cloud Console.");
                 } else if (e.name === 'AbortError' || e.message.includes('timed out')) {
-                    alert("⚠️ Time out: Internet is too slow or AI is busy. Please try again.");
+                    alert("⚠️ Time out: Internet is too slow. Try taking the photo again.");
                 } else {
                     alert("⚠️ AI Error: Could not analyze image. Please try again.");
                 }
@@ -421,7 +430,7 @@
             const [userEmail, setUserEmail] = React.useState('');
             const [userPass, setUserPass] = React.useState('');
             const [streak, setStreak] = React.useState(0);
-            const [justSubmitted, setJustSubmitted] = React.useState(false); // For flash animation
+            const [justSubmitted, setJustSubmitted] = React.useState(false);
 
             const [reports, setReports] = React.useState([]);
             const [selectedReport, setSelectedReport] = React.useState(null);
@@ -445,7 +454,6 @@
             React.useEffect(() => {
                 document.getElementById('app-loader').style.display = 'none';
                 
-                // Load saved user data
                 const savedUser = localStorage.getItem('fixmap_user');
                 if (savedUser) {
                     const parsed = JSON.parse(savedUser);
@@ -454,7 +462,6 @@
                     setUserPass(parsed.pass || '');
                 }
 
-                // Load streak data
                 const streakData = getStreakData();
                 setStreak(streakData.count);
 
@@ -524,16 +531,14 @@
             };
 
             const submitReport = async () => {
-                // Update streak logic
                 const currentStreakData = getStreakData();
                 const newStreakData = calculateStreak(currentStreakData);
                 localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
                 setStreak(newStreakData.count);
 
-                // Trigger flash animation if streak increased or stayed same (and > 0)
                 if (newStreakData.count > 0) {
                     setJustSubmitted(true);
-                    setTimeout(() => setJustSubmitted(false), 2500); // Reset after animation length
+                    setTimeout(() => setJustSubmitted(false), 2500); 
                 }
 
                 const assigned = findContractor(analysis.category_id);
@@ -541,7 +546,6 @@
                 setReports([newReport, ...reports]);
                 if (isFirebaseAvailable && db && !isOfflineMode) { try { await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({ ...newReport, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); } catch(e) { setIsOfflineMode(true); } }
                 
-                // Reset form
                 setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
 
@@ -550,11 +554,10 @@
                 if (contractor && pass === '123') { 
                     setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor'); 
                     setCurrentUser(contractor); 
-                    // Redirect Logic
                     if (contractor.type === 'admin') {
                         setView('dash');
                     } else {
-                        setView('subscription'); // Contractor goes to subscription
+                        setView('subscription');
                     }
                 } else alert(T.wrong_pass);
             };
