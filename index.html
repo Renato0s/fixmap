@@ -261,6 +261,42 @@
             return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
+        // --- STREAK LOGIC ---
+        const STREAK_KEY = 'fixmap_streak_data';
+        
+        const getStreakData = () => {
+            const data = localStorage.getItem(STREAK_KEY);
+            return data ? JSON.parse(data) : { count: 0, lastDate: null };
+        };
+
+        const calculateStreak = (currentStreakData) => {
+            const now = new Date();
+            // Use toDateString for easy day comparison (ignoring time)
+            const todayStr = now.toDateString();
+            let { count, lastDate } = currentStreakData;
+
+            if (!lastDate) {
+                // First submission ever
+                return { count: 1, lastDate: todayStr };
+            }
+
+            if (lastDate === todayStr) {
+                // Already submitted today, keep streak same
+                return { count, lastDate };
+            }
+
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            if (lastDate === yesterday.toDateString()) {
+                // Submitted yesterday, increment
+                return { count: count + 1, lastDate: todayStr };
+            } else {
+                // Broken streak, reset to 1
+                return { count: 1, lastDate: todayStr };
+            }
+        };
+
         // --- IMAGE ANALYSIS SERVICE ---
         const callGeminiImage = async (payload) => {
             const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro", "gemini-2.0-flash-exp", "gemini-1.5-flash-001"];
@@ -268,7 +304,7 @@
 
             for (const model of models) {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout to 45s
+                const timeoutId = setTimeout(() => controller.abort(), 45000); 
 
                 try {
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleImageApiKey}`;
@@ -288,7 +324,6 @@
                 } catch (error) {
                     clearTimeout(timeoutId);
                     if (error.message === "REFERRER_BLOCKED") throw error;
-                    // Logging specific errors
                     if (error.name === 'AbortError') {
                         console.warn(`Model ${model} timed out (45s).`);
                     } else {
@@ -303,7 +338,6 @@
         const analyzeImage = async (file, lang) => {
             try {
                 const b64 = await fileToBase64(file);
-                // Updated Prompt: Detailed Description & Anti-Fake
                 const prompt = `Analyze this image for a civic issue app. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
                 
                 STEP 1: VALIDITY CHECK
@@ -375,7 +409,8 @@
             const [userName, setUserName] = React.useState('');
             const [userEmail, setUserEmail] = React.useState('');
             const [userPass, setUserPass] = React.useState('');
-            
+            const [streak, setStreak] = React.useState(0);
+
             const [reports, setReports] = React.useState([]);
             const [selectedReport, setSelectedReport] = React.useState(null);
 
@@ -397,6 +432,8 @@
             // Init
             React.useEffect(() => {
                 document.getElementById('app-loader').style.display = 'none';
+                
+                // Load saved user data
                 const savedUser = localStorage.getItem('fixmap_user');
                 if (savedUser) {
                     const parsed = JSON.parse(savedUser);
@@ -404,6 +441,11 @@
                     setUserEmail(parsed.email || '');
                     setUserPass(parsed.pass || '');
                 }
+
+                // Load streak data
+                const streakData = getStreakData();
+                setStreak(streakData.count);
+
                 if (isFirebaseAvailable && auth) {
                     auth.onAuthStateChanged(u => {
                         if (u) setAuthUser(u);
@@ -470,10 +512,18 @@
             };
 
             const submitReport = async () => {
+                // Update streak logic
+                const currentStreakData = getStreakData();
+                const newStreakData = calculateStreak(currentStreakData);
+                localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
+                setStreak(newStreakData.count);
+
                 const assigned = findContractor(analysis.category_id);
                 const newReport = { ...analysis, fio: fio || userName || 'Anon', email: userEmail, address: address || 'No address', isPremium, photoBefore: preview, contractorId: assigned?.id || 'admin', contractorName: assigned?.name || 'Admin', status: 'Назначена', createdAt: new Date(), id: Date.now().toString() };
                 setReports([newReport, ...reports]);
                 if (isFirebaseAvailable && db && !isOfflineMode) { try { await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({ ...newReport, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); } catch(e) { setIsOfflineMode(true); } }
+                
+                // Reset form
                 setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
 
@@ -683,8 +733,16 @@
                 <div className="min-h-screen bg-gray-50 pb-20 relative">
                     <div className="bg-blue-600 text-white p-6 rounded-b-[30px] shadow-xl">
                         <div className="flex justify-between items-center mb-6">
-                            <h1 className="text-2xl font-bold flex items-center gap-2"><img src={APP_LOGO} className="w-8 h-8 rounded-full bg-white"/> {T.app_name}</h1>
-                            <div className="flex gap-2">
+                            <h1 className="text-2xl font-bold flex items-center gap-2">
+                                <img src={APP_LOGO} className="w-8 h-8 rounded-full bg-white"/> {T.app_name}
+                            </h1>
+                            <div className="flex items-center gap-2">
+                                {/* STREAK DISPLAY */}
+                                <div className="flex items-center gap-1 bg-orange-500/20 px-3 py-1 rounded-full text-orange-100 font-bold">
+                                    <Icon name="flame" size={18} className={streak > 0 ? "text-orange-400 animate-pulse" : "text-gray-400"} />
+                                    <span>{streak}</span>
+                                </div>
+                                
                                 <button onClick={() => setView('lang_select')} className="text-xs bg-white/20 w-8 h-8 rounded-full flex items-center justify-center font-bold">{lang === 'en' ? 'EN' : 'RU'}</button>
                                 <button onClick={() => setView('login')} className="text-xs bg-white/20 px-3 py-1 rounded-full">{T.staff_login_btn}</button>
                             </div>
@@ -693,7 +751,8 @@
                             <p className="text-sm opacity-90 mb-3">{T.welcome_subtitle}</p>
                             <label className="bg-white text-blue-600 w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-blue-50 transition shadow-lg active:scale-95">
                                 <Icon name="camera"/> {T.take_photo}
-                                <input type="file" accept="image/*" className="hidden" onChange={handleFile}/>
+                                {/* FORCE CAMERA ON MOBILE */}
+                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile}/>
                             </label>
                         </div>
                     </div>
