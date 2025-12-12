@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FixMap</title>
+    <title>FixMap Live</title>
     
     <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -72,6 +72,7 @@
         .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
         .status-dot.online { background-color: #22c55e; box-shadow: 0 0 5px #22c55e; }
         .status-dot.offline { background-color: #ef4444; }
+        .status-dot.connecting { background-color: #eab308; animation: pulse 1s infinite; }
     </style>
 </head>
 <body>
@@ -108,8 +109,9 @@
                 feed_title: "Лента событий",
                 take_photo: "Сделать фото",
                 empty_feed: "Лента пуста. Станьте первым!",
-                offline_mode: "Оффлайн (Нажмите для инфо)",
-                online_mode: "Онлайн",
+                offline_mode: "Ошибка соединения",
+                online_mode: "Синхронизация активна",
+                connecting: "Подключение...",
                 streak_days: "дней подряд",
                 
                 // Registration
@@ -122,7 +124,7 @@
                 email_ph: "Email",
                 pass_ph: "Пароль",
                 login_submit: "Войти",
-                wrong_pass: "Неверный пароль",
+                wrong_pass: "Неверный пароль или почта",
                 
                 // Subscription
                 sub_title: "Выберите тариф",
@@ -181,8 +183,9 @@
                 feed_title: "Activity Feed",
                 take_photo: "Take a Photo",
                 empty_feed: "Feed is empty. Be the first!",
-                offline_mode: "Offline (Tap for info)",
-                online_mode: "Online",
+                offline_mode: "Connection Error",
+                online_mode: "Sync Active",
+                connecting: "Connecting...",
                 streak_days: "day streak",
                 
                 // Registration
@@ -195,7 +198,7 @@
                 email_ph: "Email",
                 pass_ph: "Password",
                 login_submit: "Log In",
-                wrong_pass: "Wrong password",
+                wrong_pass: "Wrong password or email",
                 
                 // Subscription
                 sub_title: "Choose Subscription",
@@ -255,7 +258,9 @@
         let isFirebaseAvailable = false;
         let firebaseError = null;
         
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fixmap-live-v1';
+        // CRITICAL: Force a shared ID for this demo session so both phones hit the same bucket
+        // If the platform provides __app_id, use it, otherwise use a fixed demo ID.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fixmap-demo-room';
 
         try {
             const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -264,7 +269,7 @@
                 auth = firebase.auth();
                 db = firebase.firestore();
                 isFirebaseAvailable = true;
-                console.log("Firebase initialized successfully");
+                console.log("Firebase initialized successfully. Room:", appId);
             } else {
                 firebaseError = "Config Missing";
                 console.warn("No Firebase config found.");
@@ -322,14 +327,6 @@
             } else {
                 return { count: 1, lastDate: todayStr };
             }
-        };
-
-        // --- LOCAL STORAGE BACKUP FOR REPORTS ---
-        const LOCAL_REPORTS_KEY = 'fixmap_local_reports';
-        const saveLocalReports = (reports) => localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
-        const getLocalReports = () => {
-            const data = localStorage.getItem(LOCAL_REPORTS_KEY);
-            return data ? JSON.parse(data) : [];
         };
 
         // --- IMAGE ANALYSIS SERVICE ---
@@ -413,7 +410,7 @@
             
             // App State
             const [authUser, setAuthUser] = React.useState(null);
-            const [isOfflineMode, setIsOfflineMode] = React.useState(false); 
+            const [connectionStatus, setConnectionStatus] = React.useState('connecting'); // connecting, online, offline
             const [isLocating, setIsLocating] = React.useState(false);
             const [debugMsg, setDebugMsg] = React.useState(null);
             
@@ -459,10 +456,6 @@
                 const streakData = getStreakData();
                 setStreak(streakData.count);
 
-                // Load Local Backup Reports immediately (so they don't see empty screen)
-                const localData = getLocalReports();
-                if (localData.length > 0) setReports(localData);
-
                 // Initialize Auth
                 const initAuth = async () => {
                     if (isFirebaseAvailable && auth) {
@@ -473,7 +466,7 @@
                              await auth.signInAnonymously();
                         }
                     } else {
-                        setIsOfflineMode(true);
+                        setConnectionStatus('offline');
                         setDebugMsg(firebaseError || "Unknown Init Error");
                     }
                 };
@@ -484,9 +477,8 @@
                     const unsubAuth = auth.onAuthStateChanged(u => {
                         if (u) {
                             setAuthUser(u);
-                            setIsOfflineMode(false);
                         } else {
-                            setIsOfflineMode(true);
+                            setConnectionStatus('offline');
                             setDebugMsg("No Auth User");
                         }
                     });
@@ -498,29 +490,29 @@
             React.useEffect(() => {
                 if (!authUser || !db) return;
 
+                console.log("Listening to DB:", appId);
                 const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports')
                            .orderBy('createdAt', 'desc')
                            .limit(50);
 
                 const unsub = q.onSnapshot(
                     (snapshot) => {
+                        console.log("Snapshot received!", snapshot.size);
                         const loadedReports = snapshot.docs.map(doc => ({
                             id: doc.id,
                             ...doc.data()
                         }));
                         setReports(loadedReports);
-                        // Update local backup
-                        saveLocalReports(loadedReports);
                         
                         if (selectedReport) {
                             const updated = loadedReports.find(r => r.id === selectedReport.id);
                             if (updated) setSelectedReport(updated);
                         }
-                        setIsOfflineMode(false); // We have data, so we are online
+                        setConnectionStatus('online'); 
                     },
                     (error) => {
                         console.error("Firestore Sync Error:", error);
-                        setIsOfflineMode(true);
+                        setConnectionStatus('offline');
                         setDebugMsg(error.message);
                     }
                 );
@@ -529,10 +521,11 @@
             }, [authUser]);
 
             const updateReportStatus = async (reportId, newStatus) => {
+                // Optimistic UI
                 setReports(prev => prev.map(r => r.id === reportId ? {...r, status: newStatus} : r));
                 if (selectedReport && selectedReport.id === reportId) setSelectedReport(prev => ({...prev, status: newStatus}));
                 
-                if (db && !isOfflineMode) { 
+                if (db) { 
                     try { 
                         await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports')
                                 .doc(reportId)
@@ -542,6 +535,12 @@
             };
 
             const submitReport = async () => {
+                // Debug Check
+                if (connectionStatus !== 'online') {
+                    alert("Ошибка: Нет соединения с сервером. Заявка не будет видна другим пользователям. Проверьте интернет.");
+                    return; // Blocking submission to force user to realize sync is broken
+                }
+
                 const currentStreakData = getStreakData();
                 const newStreakData = calculateStreak(currentStreakData);
                 localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
@@ -567,26 +566,15 @@
                 };
 
                 // Add to DB
-                if (db && !isOfflineMode) { 
-                    try { 
-                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
-                    } catch(e) { 
-                        console.error("Submission failed", e);
-                        setDebugMsg(e.message);
-                        // Fallback to local
-                        const localReport = {...newReport, createdAt: new Date(), id: Date.now().toString()};
-                        const updatedReports = [localReport, ...reports];
-                        setReports(updatedReports);
-                        saveLocalReports(updatedReports);
-                        alert("Saved Locally (Cloud Error)");
-                    } 
-                } else {
-                     // Offline fallback
-                     const localReport = {...newReport, createdAt: new Date(), id: Date.now().toString()};
-                     const updatedReports = [localReport, ...reports];
-                     setReports(updatedReports);
-                     saveLocalReports(updatedReports);
-                }
+                try { 
+                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
+                    // Success!
+                } catch(e) { 
+                    console.error("Submission failed", e);
+                    setDebugMsg(e.message);
+                    alert("Ошибка отправки в облако: " + e.message);
+                    return; // Don't clear form if failed
+                } 
                 
                 setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
@@ -629,12 +617,16 @@
             };
 
             const handleLogin = () => {
-                const contractor = CONTRACTORS.find(c => c.email === email);
-                if (contractor && pass === '123') { 
+                const cleanEmail = email.trim().toLowerCase();
+                const cleanPass = pass.trim();
+                const contractor = CONTRACTORS.find(c => c.email.toLowerCase() === cleanEmail);
+                if (contractor && cleanPass === '123') { 
                     setUserRole(contractor.type === 'admin' ? 'admin' : 'contractor'); 
                     setCurrentUser(contractor); 
                     if (contractor.type === 'admin') setView('dash'); else setView('subscription');
-                } else alert(T.wrong_pass);
+                } else {
+                    alert(T.wrong_pass);
+                }
             };
 
             // --- VIEWS ---
@@ -664,7 +656,7 @@
                             <button onClick={() => setView('home')} className="absolute top-4 right-4 text-gray-400"><Icon name="x"/></button>
                             <img src={APP_LOGO} className="w-16 h-16 mb-4 rounded-xl"/>
                             <h2 className="text-xl font-bold mb-6 text-gray-800">{T.login_title}</h2>
-                            <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-4 space-y-1 w-full"><p><b>Roads:</b> road@bishkek.kg</p><p><b>Pass:</b> 123</p></div>
+                            <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 mb-4 space-y-1 w-full"><p><b>Admin:</b> admin@gov.kg</p><p><b>Pass:</b> 123</p></div>
                             <input value={email} onChange={e=>setEmail(e.target.value)} placeholder={T.email_ph} className="w-full border p-3 rounded-xl mb-3"/>
                             <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={T.pass_ph} className="w-full border p-3 rounded-xl mb-6"/>
                             <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg">{T.login_submit}</button>
@@ -868,8 +860,8 @@
                         <div className="flex justify-between items-center mb-4 px-2">
                             <h2 className="font-bold text-gray-800">{T.feed_title}</h2>
                             <div className="flex gap-2 items-center cursor-pointer" onClick={() => debugMsg && alert(`Connection Debug:\n${debugMsg}\nFirebase: ${isFirebaseAvailable ? "Yes" : "No"}`)}>
-                                <span className={`status-dot ${isOfflineMode ? 'offline' : 'online'}`}></span>
-                                <span className="text-[10px] font-bold text-gray-500">{isOfflineMode ? T.offline_mode : T.online_mode}</span>
+                                <span className={`status-dot ${connectionStatus}`}></span>
+                                <span className="text-[10px] font-bold text-gray-500">{connectionStatus === 'online' ? T.online_mode : connectionStatus === 'connecting' ? T.connecting : T.offline_mode}</span>
                             </div>
                         </div>
                         {reports.map(r => (
