@@ -108,7 +108,7 @@
                 feed_title: "Лента событий",
                 take_photo: "Сделать фото",
                 empty_feed: "Лента пуста. Станьте первым!",
-                offline_mode: "Оффлайн",
+                offline_mode: "Оффлайн (Нажмите для инфо)",
                 online_mode: "Онлайн",
                 streak_days: "дней подряд",
                 
@@ -181,7 +181,7 @@
                 feed_title: "Activity Feed",
                 take_photo: "Take a Photo",
                 empty_feed: "Feed is empty. Be the first!",
-                offline_mode: "Offline",
+                offline_mode: "Offline (Tap for info)",
                 online_mode: "Online",
                 streak_days: "day streak",
                 
@@ -249,12 +249,12 @@
             }
         };
 
-        // --- FIREBASE INIT (STRICT & ROBUST) ---
+        // --- FIREBASE INIT (ROBUST) ---
         let auth = null;
         let db = null;
         let isFirebaseAvailable = false;
+        let firebaseError = null;
         
-        // Use the platform's app ID variable
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'fixmap-live-v1';
 
         try {
@@ -266,13 +266,15 @@
                 isFirebaseAvailable = true;
                 console.log("Firebase initialized successfully");
             } else {
-                console.warn("No Firebase config found. App will run in Offline Mode.");
+                firebaseError = "Config Missing";
+                console.warn("No Firebase config found.");
             }
         } catch (e) { 
+            firebaseError = e.message;
             console.error("Firebase Initialization Error:", e); 
         }
 
-        // --- UTILS (OPTIMIZED) ---
+        // --- UTILS ---
         
         // Fast Image Compression
         const compressImage = (file) => new Promise((resolve) => {
@@ -283,15 +285,12 @@
                 img.src = e.target.result;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; // Optimal for Firestore size limit
+                    const MAX_WIDTH = 800; 
                     const scaleSize = MAX_WIDTH / img.width;
                     canvas.width = MAX_WIDTH;
                     canvas.height = img.height * scaleSize;
-                    
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    
-                    // Compress to JPEG 0.6 quality (High compression, AI readable)
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                     resolve(dataUrl.split(',')[1]); 
                 }
@@ -306,23 +305,18 @@
 
         // --- STREAK LOGIC ---
         const STREAK_KEY = 'fixmap_streak_data';
-        
         const getStreakData = () => {
             const data = localStorage.getItem(STREAK_KEY);
             return data ? JSON.parse(data) : { count: 0, lastDate: null };
         };
-
         const calculateStreak = (currentStreakData) => {
             const now = new Date();
             const todayStr = now.toDateString();
             let { count, lastDate } = currentStreakData;
-
             if (!lastDate) return { count: 1, lastDate: todayStr };
             if (lastDate === todayStr) return { count, lastDate };
-
             const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
-            
             if (lastDate === yesterday.toDateString()) {
                 return { count: count + 1, lastDate: todayStr };
             } else {
@@ -330,15 +324,21 @@
             }
         };
 
-        // --- IMAGE ANALYSIS SERVICE (OPTIMIZED) ---
+        // --- LOCAL STORAGE BACKUP FOR REPORTS ---
+        const LOCAL_REPORTS_KEY = 'fixmap_local_reports';
+        const saveLocalReports = (reports) => localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
+        const getLocalReports = () => {
+            const data = localStorage.getItem(LOCAL_REPORTS_KEY);
+            return data ? JSON.parse(data) : [];
+        };
+
+        // --- IMAGE ANALYSIS SERVICE ---
         const callGeminiImage = async (payload) => {
             const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash-exp"];
             let lastError = null;
-
             for (const model of models) {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000); 
-
                 try {
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleImageApiKey}`;
                     const response = await fetch(url, { 
@@ -348,16 +348,13 @@
                         signal: controller.signal
                     });
                     clearTimeout(timeoutId);
-                    
                     if (response.ok) return await response.json();
-
                     const errorText = await response.text();
                     if (response.status === 403) throw new Error("REFERRER_BLOCKED");
                     lastError = new Error(`Error ${model}: ${response.status}`);
                 } catch (error) {
                     clearTimeout(timeoutId);
                     if (error.message === "REFERRER_BLOCKED") throw error;
-                    console.warn(`Model ${model} failed/timeout:`, error);
                     lastError = error;
                 }
             }
@@ -367,7 +364,6 @@
         const analyzeImage = async (file, lang) => {
             try {
                 const b64 = await compressImage(file);
-                
                 const prompt = `Analyze this image for a civic issue app. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
                 STEP 1: VALIDITY CHECK (Is it road damage, waste, water leak, broken light?). Mark "is_fake": true if selfie/screen/unrelated.
                 STEP 2: DETAILED ANALYSIS. Thorough description.
@@ -380,19 +376,14 @@
                     "description": "Long detailed description",
                     "importance": "High/Medium/Low"
                 }`;
-                
                 const data = await callGeminiImage({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: b64 } }] }] });
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (e) {
                 console.error("AI Analysis Fail", e);
-                if (e.message === "REFERRER_BLOCKED") {
-                    alert("⚠️ API Key Error: Referrer blocked.");
-                } else if (e.name === 'AbortError' || e.message.includes('timed out')) {
-                    alert("⚠️ Time out: Internet is too slow.");
-                } else {
-                    alert("⚠️ AI Error. Please try again.");
-                }
+                if (e.message === "REFERRER_BLOCKED") alert("⚠️ API Key Error: Referrer blocked.");
+                else if (e.name === 'AbortError' || e.message.includes('timed out')) alert("⚠️ Time out: Internet is too slow.");
+                else alert("⚠️ AI Error. Please try again.");
                 return null;
             }
         };
@@ -424,6 +415,7 @@
             const [authUser, setAuthUser] = React.useState(null);
             const [isOfflineMode, setIsOfflineMode] = React.useState(false); 
             const [isLocating, setIsLocating] = React.useState(false);
+            const [debugMsg, setDebugMsg] = React.useState(null);
             
             // User Data
             const [userName, setUserName] = React.useState('');
@@ -467,10 +459,13 @@
                 const streakData = getStreakData();
                 setStreak(streakData.count);
 
+                // Load Local Backup Reports immediately (so they don't see empty screen)
+                const localData = getLocalReports();
+                if (localData.length > 0) setReports(localData);
+
                 // Initialize Auth
                 const initAuth = async () => {
                     if (isFirebaseAvailable && auth) {
-                        // Check for custom token passed by environment
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                              try { await auth.signInWithCustomToken(__initial_auth_token); } 
                              catch(e) { console.error("Token login failed", e); await auth.signInAnonymously(); }
@@ -479,6 +474,7 @@
                         }
                     } else {
                         setIsOfflineMode(true);
+                        setDebugMsg(firebaseError || "Unknown Init Error");
                     }
                 };
                 
@@ -491,17 +487,15 @@
                             setIsOfflineMode(false);
                         } else {
                             setIsOfflineMode(true);
+                            setDebugMsg("No Auth User");
                         }
                     });
                     return () => unsubAuth();
                 }
             }, []);
 
-            // 2. Realtime Database Sync (CRITICAL FOR 2 PHONES)
+            // 2. Realtime Database Sync
             React.useEffect(() => {
-                // We use a PUBLIC collection so Contractor and Citizen see the same data
-                // Path: artifacts/{appId}/public/data/reports
-                
                 if (!authUser || !db) return;
 
                 const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports')
@@ -515,43 +509,39 @@
                             ...doc.data()
                         }));
                         setReports(loadedReports);
+                        // Update local backup
+                        saveLocalReports(loadedReports);
                         
-                        // If we have a selected report, update its data in real-time too
                         if (selectedReport) {
                             const updated = loadedReports.find(r => r.id === selectedReport.id);
                             if (updated) setSelectedReport(updated);
                         }
+                        setIsOfflineMode(false); // We have data, so we are online
                     },
                     (error) => {
                         console.error("Firestore Sync Error:", error);
                         setIsOfflineMode(true);
+                        setDebugMsg(error.message);
                     }
                 );
 
                 return () => unsub();
             }, [authUser]);
 
-            // --- ACTIONS ---
-
             const updateReportStatus = async (reportId, newStatus) => {
-                // Optimistic UI Update (Instant feedback)
                 setReports(prev => prev.map(r => r.id === reportId ? {...r, status: newStatus} : r));
                 if (selectedReport && selectedReport.id === reportId) setSelectedReport(prev => ({...prev, status: newStatus}));
                 
-                // Real DB Update
                 if (db && !isOfflineMode) { 
                     try { 
                         await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports')
                                 .doc(reportId)
                                 .update({ status: newStatus }); 
-                    } catch (e) { 
-                        alert("Error updating status online. Check connection."); 
-                    } 
+                    } catch (e) { alert("Error updating status online."); } 
                 }
             };
 
             const submitReport = async () => {
-                // 1. Update Streak
                 const currentStreakData = getStreakData();
                 const newStreakData = calculateStreak(currentStreakData);
                 localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
@@ -562,42 +552,45 @@
                     setTimeout(() => setJustSubmitted(false), 2500); 
                 }
 
-                // 2. Prepare Data
                 const assigned = findContractor(analysis.category_id);
-                // Note: photoBefore is already a compressed Base64 string from analyzeImage
                 const newReport = { 
                     ...analysis, 
                     fio: fio || userName || 'Anon', 
                     email: userEmail, 
                     address: address || 'No address', 
                     isPremium, 
-                    photoBefore: preview, // Stores the base64 image string directly in DB (OK for <1MB)
+                    photoBefore: preview, 
                     contractorId: assigned?.id || 'admin', 
                     contractorName: assigned?.name || 'Admin', 
                     status: 'Назначена', 
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp() // Server time is crucial for sorting
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
-                // 3. Send to DB
+                // Add to DB
                 if (db && !isOfflineMode) { 
                     try { 
                         await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
                     } catch(e) { 
                         console.error("Submission failed", e);
-                        alert("Could not save report to cloud. Trying locally.");
-                        // Fallback: Add to local state manually if DB fails
-                        setReports([ {...newReport, createdAt: new Date(), id: Date.now().toString()}, ...reports ]);
+                        setDebugMsg(e.message);
+                        // Fallback to local
+                        const localReport = {...newReport, createdAt: new Date(), id: Date.now().toString()};
+                        const updatedReports = [localReport, ...reports];
+                        setReports(updatedReports);
+                        saveLocalReports(updatedReports);
+                        alert("Saved Locally (Cloud Error)");
                     } 
                 } else {
                      // Offline fallback
-                     setReports([ {...newReport, createdAt: new Date(), id: Date.now().toString()}, ...reports ]);
+                     const localReport = {...newReport, createdAt: new Date(), id: Date.now().toString()};
+                     const updatedReports = [localReport, ...reports];
+                     setReports(updatedReports);
+                     saveLocalReports(updatedReports);
                 }
                 
-                // 4. Reset Form
                 setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
 
-            // --- HELPERS ---
             const findContractor = (catId) => CONTRACTORS.find(c => c.type === catId) || CONTRACTORS.find(c => c.type === 'admin');
             const translateStatus = (status) => { const map = { 'Назначена': T.status_new, 'Принято': T.status_accepted, 'В работе': T.status_work, 'Выполнено': T.status_done, 'Отклонена': T.status_rejected }; return map[status] || status; };
             const translateImportance = (imp) => { if (!imp) return T.imp_low; if (imp === 'High') return T.imp_high; if (imp === 'Medium') return T.imp_medium; return T.imp_low; };
@@ -615,11 +608,9 @@
                 if (e.target.files?.[0]) {
                     const f = e.target.files[0];
                     setFile(f);
-                    // Use FileReader for preview to avoid memory leaks with large object URLs
                     const reader = new FileReader();
                     reader.onload = (ev) => setPreview(ev.target.result);
                     reader.readAsDataURL(f);
-                    
                     setView('analyze');
                     const res = await analyzeImage(f, lang);
                     if (res && res.is_fake) { alert(`❌ ${T.fake_detected}\n\n${res.fake_reason || "Invalid image"}`); setFile(null); setPreview(null); setView('home'); return; }
@@ -876,7 +867,7 @@
                     <div className="p-4">
                         <div className="flex justify-between items-center mb-4 px-2">
                             <h2 className="font-bold text-gray-800">{T.feed_title}</h2>
-                            <div className="flex gap-2 items-center">
+                            <div className="flex gap-2 items-center cursor-pointer" onClick={() => debugMsg && alert(`Connection Debug:\n${debugMsg}\nFirebase: ${isFirebaseAvailable ? "Yes" : "No"}`)}>
                                 <span className={`status-dot ${isOfflineMode ? 'offline' : 'online'}`}></span>
                                 <span className="text-[10px] font-bold text-gray-500">{isOfflineMode ? T.offline_mode : T.online_mode}</span>
                             </div>
