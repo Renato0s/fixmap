@@ -109,9 +109,8 @@
                 feed_title: "Лента событий",
                 take_photo: "Сделать фото",
                 empty_feed: "Лента пуста. Станьте первым!",
-                offline_mode: "Ошибка соединения",
-                online_mode: "Синхронизация активна",
-                connecting: "Подключение...",
+                offline_mode: "Оффлайн (Нажмите для инфо)",
+                online_mode: "Онлайн",
                 streak_days: "дней подряд",
                 
                 // Registration
@@ -259,7 +258,6 @@
         let firebaseError = null;
         
         // CRITICAL: Force a shared ID for this demo session so both phones hit the same bucket
-        // If the platform provides __app_id, use it, otherwise use a fixed demo ID.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'fixmap-demo-room';
 
         try {
@@ -327,6 +325,14 @@
             } else {
                 return { count: 1, lastDate: todayStr };
             }
+        };
+        
+        // --- LOCAL STORAGE BACKUP FOR REPORTS ---
+        const LOCAL_REPORTS_KEY = 'fixmap_local_reports';
+        const saveLocalReports = (reports) => localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
+        const getLocalReports = () => {
+            const data = localStorage.getItem(LOCAL_REPORTS_KEY);
+            return data ? JSON.parse(data) : [];
         };
 
         // --- IMAGE ANALYSIS SERVICE ---
@@ -456,6 +462,10 @@
                 const streakData = getStreakData();
                 setStreak(streakData.count);
 
+                // Load Local Backup Reports immediately (so they don't see empty screen)
+                const localData = getLocalReports();
+                if (localData.length > 0) setReports(localData);
+
                 // Initialize Auth
                 const initAuth = async () => {
                     if (isFirebaseAvailable && auth) {
@@ -503,6 +513,7 @@
                             ...doc.data()
                         }));
                         setReports(loadedReports);
+                        saveLocalReports(loadedReports); // Update local backup
                         
                         if (selectedReport) {
                             const updated = loadedReports.find(r => r.id === selectedReport.id);
@@ -530,17 +541,14 @@
                         await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports')
                                 .doc(reportId)
                                 .update({ status: newStatus }); 
-                    } catch (e) { alert("Error updating status online."); } 
+                    } catch (e) { console.error("Status update error", e); } 
                 }
             };
 
             const submitReport = async () => {
-                // Debug Check
-                if (connectionStatus !== 'online') {
-                    alert("Ошибка: Нет соединения с сервером. Заявка не будет видна другим пользователям. Проверьте интернет.");
-                    return; // Blocking submission to force user to realize sync is broken
-                }
-
+                // --- HYBRID SUBMISSION ---
+                // We do NOT block on connection status. We try to send, if fail, save local.
+                
                 const currentStreakData = getStreakData();
                 const newStreakData = calculateStreak(currentStreakData);
                 localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
@@ -562,20 +570,37 @@
                     contractorId: assigned?.id || 'admin', 
                     contractorName: assigned?.name || 'Admin', 
                     status: 'Назначена', 
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp() // This needs special handling for local
                 };
 
-                // Add to DB
-                try { 
-                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
-                    // Success!
-                } catch(e) { 
-                    console.error("Submission failed", e);
-                    setDebugMsg(e.message);
-                    alert("Ошибка отправки в облако: " + e.message);
-                    return; // Don't clear form if failed
-                } 
+                let submissionSuccess = false;
+
+                // 1. Try Firebase
+                if (db) {
+                    try { 
+                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
+                        submissionSuccess = true;
+                    } catch(e) { 
+                        console.error("Cloud Submission failed", e);
+                        setDebugMsg(e.message);
+                        // Fall through to local save
+                    } 
+                }
+
+                // 2. If Firebase failed or not available, save locally so user isn't stuck
+                if (!submissionSuccess) {
+                     const localReport = {
+                         ...newReport, 
+                         createdAt: new Date(), 
+                         id: 'local_' + Date.now().toString()
+                     };
+                     const updatedReports = [localReport, ...reports];
+                     setReports(updatedReports);
+                     saveLocalReports(updatedReports);
+                     // Optional: Toast "Saved locally"
+                }
                 
+                // 3. Reset UI always
                 setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
 
