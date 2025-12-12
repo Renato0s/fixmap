@@ -109,8 +109,9 @@
                 feed_title: "Лента событий",
                 take_photo: "Сделать фото",
                 empty_feed: "Лента пуста. Станьте первым!",
-                offline_mode: "Оффлайн (Нажмите для инфо)",
+                offline_mode: "Оффлайн",
                 online_mode: "Онлайн",
+                connecting: "Подключение...",
                 streak_days: "дней подряд",
                 
                 // Registration
@@ -182,8 +183,8 @@
                 feed_title: "Activity Feed",
                 take_photo: "Take a Photo",
                 empty_feed: "Feed is empty. Be the first!",
-                offline_mode: "Connection Error",
-                online_mode: "Sync Active",
+                offline_mode: "Offline",
+                online_mode: "Online",
                 connecting: "Connecting...",
                 streak_days: "day streak",
                 
@@ -257,7 +258,7 @@
         let isFirebaseAvailable = false;
         let firebaseError = null;
         
-        // CRITICAL: Force a shared ID for this demo session so both phones hit the same bucket
+        // Use a persistent App ID to allow syncing
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'fixmap-demo-room';
 
         try {
@@ -279,7 +280,6 @@
 
         // --- UTILS ---
         
-        // Fast Image Compression
         const compressImage = (file) => new Promise((resolve) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -300,10 +300,22 @@
             };
         });
 
+        // SAFE DATE FORMATTER
         const formatDate = (d, lang) => {
             if(!d) return '';
-            const date = d.toDate ? d.toDate() : new Date(d);
-            return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
+            let date;
+            try {
+                // Handle Firestore Timestamp or standard Date object or string
+                if (d.toDate) date = d.toDate();
+                else if (d instanceof Date) date = d;
+                else date = new Date(d);
+                
+                if (isNaN(date.getTime())) return ''; // Invalid date check
+                
+                return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
+            } catch(e) {
+                return '';
+            }
         };
 
         // --- STREAK LOGIC ---
@@ -367,26 +379,31 @@
         const analyzeImage = async (file, lang) => {
             try {
                 const b64 = await compressImage(file);
-                const prompt = `Analyze this image for a civic issue app. Language: ${lang === 'ru' ? 'Russian' : 'English'}.
-                STEP 1: VALIDITY CHECK (Is it road damage, waste, water leak, broken light?). Mark "is_fake": true if selfie/screen/unrelated.
-                STEP 2: DETAILED ANALYSIS. Thorough description.
+                // STRICT PROMPT FOR RUSSIAN LANGUAGE
+                const targetLang = lang === 'ru' ? 'RUSSIAN (Русский)' : 'ENGLISH';
+                const prompt = `Analyze this image for a civic issue app.
+                
+                IMPORTANT: OUTPUT MUST BE IN ${targetLang}.
+                
+                STEP 1: VALIDITY CHECK. Mark "is_fake": true if selfie/screen/unrelated.
+                STEP 2: DETAILED ANALYSIS. Thorough description in ${targetLang}.
+                
                 Return JSON:
                 {
                     "is_fake": boolean,
-                    "fake_reason": "String",
-                    "category_id": "road/waste/water/light/other",
-                    "type": "Short title",
-                    "description": "Long detailed description",
-                    "importance": "High/Medium/Low"
+                    "fake_reason": "String in ${targetLang}",
+                    "category_id": "road" | "waste" | "water" | "light" | "other",
+                    "type": "Short title in ${targetLang}",
+                    "description": "Long detailed description in ${targetLang}",
+                    "importance": "High" | "Medium" | "Low"
                 }`;
+                
                 const data = await callGeminiImage({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: b64 } }] }] });
                 let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
                 return JSON.parse(text);
             } catch (e) {
                 console.error("AI Analysis Fail", e);
-                if (e.message === "REFERRER_BLOCKED") alert("⚠️ API Key Error: Referrer blocked.");
-                else if (e.name === 'AbortError' || e.message.includes('timed out')) alert("⚠️ Time out: Internet is too slow.");
-                else alert("⚠️ AI Error. Please try again.");
+                // Simple Alert
                 return null;
             }
         };
@@ -416,7 +433,7 @@
             
             // App State
             const [authUser, setAuthUser] = React.useState(null);
-            const [connectionStatus, setConnectionStatus] = React.useState('connecting'); // connecting, online, offline
+            const [connectionStatus, setConnectionStatus] = React.useState('connecting'); 
             const [isLocating, setIsLocating] = React.useState(false);
             const [debugMsg, setDebugMsg] = React.useState(null);
             
@@ -450,7 +467,6 @@
             React.useEffect(() => {
                 document.getElementById('app-loader').style.display = 'none';
                 
-                // Load Local Storage User Data
                 const savedUser = localStorage.getItem('fixmap_user');
                 if (savedUser) {
                     const parsed = JSON.parse(savedUser);
@@ -462,11 +478,9 @@
                 const streakData = getStreakData();
                 setStreak(streakData.count);
 
-                // Load Local Backup Reports immediately (so they don't see empty screen)
                 const localData = getLocalReports();
                 if (localData.length > 0) setReports(localData);
 
-                // Initialize Auth
                 const initAuth = async () => {
                     if (isFirebaseAvailable && auth) {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -513,7 +527,7 @@
                             ...doc.data()
                         }));
                         setReports(loadedReports);
-                        saveLocalReports(loadedReports); // Update local backup
+                        saveLocalReports(loadedReports); 
                         
                         if (selectedReport) {
                             const updated = loadedReports.find(r => r.id === selectedReport.id);
@@ -532,7 +546,6 @@
             }, [authUser]);
 
             const updateReportStatus = async (reportId, newStatus) => {
-                // Optimistic UI
                 setReports(prev => prev.map(r => r.id === reportId ? {...r, status: newStatus} : r));
                 if (selectedReport && selectedReport.id === reportId) setSelectedReport(prev => ({...prev, status: newStatus}));
                 
@@ -546,9 +559,7 @@
             };
 
             const submitReport = async () => {
-                // --- HYBRID SUBMISSION ---
-                // We do NOT block on connection status. We try to send, if fail, save local.
-                
+                // UPDATE STREAK
                 const currentStreakData = getStreakData();
                 const newStreakData = calculateStreak(currentStreakData);
                 localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
@@ -560,6 +571,8 @@
                 }
 
                 const assigned = findContractor(analysis.category_id);
+                
+                // IMPORTANT: Use standard JS Date for compatibility across local and cloud
                 const newReport = { 
                     ...analysis, 
                     fio: fio || userName || 'Anon', 
@@ -570,37 +583,42 @@
                     contractorId: assigned?.id || 'admin', 
                     contractorName: assigned?.name || 'Admin', 
                     status: 'Назначена', 
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp() // This needs special handling for local
+                    createdAt: new Date() // SAFE DATE FORMAT
                 };
 
                 let submissionSuccess = false;
 
-                // 1. Try Firebase
-                if (db) {
+                // 1. Try Firebase Cloud
+                if (db && connectionStatus !== 'offline') {
                     try { 
-                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
+                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add({
+                            ...newReport,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp() // Only convert to Server TS for cloud
+                        }); 
                         submissionSuccess = true;
                     } catch(e) { 
                         console.error("Cloud Submission failed", e);
                         setDebugMsg(e.message);
-                        // Fall through to local save
                     } 
                 }
 
-                // 2. If Firebase failed or not available, save locally so user isn't stuck
+                // 2. Always fallback/sync local state if needed (or if offline)
+                // Even if cloud success, we might want to update local UI instantly, 
+                // but usually the onSnapshot handles it. 
+                // IF SUBMISSION FAILED or OFFLINE, we manually add it to local state.
                 if (!submissionSuccess) {
                      const localReport = {
                          ...newReport, 
-                         createdAt: new Date(), 
                          id: 'local_' + Date.now().toString()
                      };
                      const updatedReports = [localReport, ...reports];
                      setReports(updatedReports);
                      saveLocalReports(updatedReports);
-                     // Optional: Toast "Saved locally"
+                     alert("Сохранено локально (Нет сети)");
+                } else {
+                    // Success feedback
                 }
                 
-                // 3. Reset UI always
                 setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
 
@@ -625,10 +643,19 @@
                     reader.onload = (ev) => setPreview(ev.target.result);
                     reader.readAsDataURL(f);
                     setView('analyze');
+                    
                     const res = await analyzeImage(f, lang);
-                    if (res && res.is_fake) { alert(`❌ ${T.fake_detected}\n\n${res.fake_reason || "Invalid image"}`); setFile(null); setPreview(null); setView('home'); return; }
+                    if (res && res.is_fake) { 
+                        alert(`❌ ${T.fake_detected}\n\n${res.fake_reason || "Invalid image"}`); 
+                        setFile(null); setPreview(null); setView('home'); return; 
+                    }
+                    if (!res) {
+                         alert("Ошибка анализа. Попробуйте снова.");
+                         setFile(null); setPreview(null); setView('home'); return;
+                    }
+                    
                     setFio(userName); 
-                    setAnalysis(res || { category_id: 'other', type: "Manual", description: "...", importance: "Low" });
+                    setAnalysis(res);
                 }
             };
 
