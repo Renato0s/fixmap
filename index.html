@@ -342,9 +342,8 @@
 
         // --- IMAGE ANALYSIS SERVICE ---
         const callGeminiImage = async (payload) => {
-            // Using Flash model for speed
-            // Removing 'latest' as it causes 404 errors
-            const models = ["gemini-1.5-flash", "gemini-2.0-flash-exp"];
+            // Updated models list to avoid 404 errors with deprecated/invalid aliases
+            const models = ["gemini-1.5-flash"];
             let lastError = null;
             for (const model of models) {
                 const controller = new AbortController();
@@ -361,11 +360,6 @@
                     if (response.ok) return await response.json();
                     const errorText = await response.text();
                     if (response.status === 403) throw new Error("REFERRER_BLOCKED");
-                    // Ignore 404s from specific models and try next
-                    if (response.status === 404) {
-                        console.warn(`Model ${model} not found (404), skipping...`);
-                        continue;
-                    }
                     lastError = new Error(`Error ${model}: ${response.status}`);
                 } catch (error) {
                     clearTimeout(timeoutId);
@@ -442,6 +436,8 @@
             const [userPass, setUserPass] = React.useState('');
             const [streak, setStreak] = React.useState(0);
             const [justSubmitted, setJustSubmitted] = React.useState(false);
+            // NEW: Loading state for submission
+            const [isSubmitting, setIsSubmitting] = React.useState(false);
 
             // Data
             const [reports, setReports] = React.useState([]);
@@ -565,59 +561,73 @@
             };
 
             const submitReport = async () => {
-                const currentStreakData = getStreakData();
-                const newStreakData = calculateStreak(currentStreakData);
-                localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
-                setStreak(newStreakData.count);
+                if (isSubmitting) return; // Prevent double clicks
+                setIsSubmitting(true);
 
-                if (newStreakData.count > 0) {
-                    setJustSubmitted(true);
-                    setTimeout(() => setJustSubmitted(false), 2500); 
-                }
+                try {
+                    // 1. Streak Logic
+                    const currentStreakData = getStreakData();
+                    const newStreakData = calculateStreak(currentStreakData);
+                    localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
+                    setStreak(newStreakData.count);
 
-                const assigned = findContractor(analysis.category_id);
+                    if (newStreakData.count > 0) {
+                        setJustSubmitted(true);
+                        setTimeout(() => setJustSubmitted(false), 2500); 
+                    }
+
+                    const assigned = findContractor(analysis.category_id);
+                    
+                    const newReport = { 
+                        ...analysis, 
+                        fio: fio || userName || 'Anon', 
+                        email: userEmail, 
+                        address: address || 'No address', 
+                        isPremium, 
+                        photoBefore: preview, 
+                        contractorId: assigned?.id || 'admin', 
+                        contractorName: assigned?.name || 'Admin', 
+                        status: 'Назначена', 
+                        createdAt: new Date() // Standard Date
+                    };
+
+                    let submissionSuccess = false;
+
+                    // 2. Try Firebase Cloud
+                    if (db && connectionStatus === 'cloud') {
+                        try { 
+                            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
+                            submissionSuccess = true;
+                        } catch(e) { 
+                            console.error("Cloud Submission failed", e);
+                            // Don't alert here, just fallback to local
+                        } 
+                    }
+
+                    // 3. Fallback to Local
+                    if (!submissionSuccess) {
+                        const localReport = {
+                            ...newReport, 
+                            id: 'local_' + Date.now().toString()
+                        };
+                        const updatedReports = [localReport, ...reports];
+                        setReports(updatedReports);
+                        saveLocalReports(updatedReports);
+                        
+                        // Show alert only if explicitly in local mode or submission failed unexpectedly
+                        if (connectionStatus === 'local') {
+                            alert("⚠️ Оффлайн-режим. Заявка сохранена в телефоне.");
+                        }
+                    }
+                    
+                    // Reset Form
+                    setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
                 
-                const newReport = { 
-                    ...analysis, 
-                    fio: fio || userName || 'Anon', 
-                    email: userEmail, 
-                    address: address || 'No address', 
-                    isPremium, 
-                    photoBefore: preview, 
-                    contractorId: assigned?.id || 'admin', 
-                    contractorName: assigned?.name || 'Admin', 
-                    status: 'Назначена', 
-                    createdAt: new Date() // Store as standard Date string/object for compat
-                };
-
-                let submissionSuccess = false;
-
-                // 1. Try Firebase Cloud
-                if (db && connectionStatus === 'cloud') {
-                    try { 
-                        // Use .add() with plain object, firestore client handles Date object
-                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
-                        submissionSuccess = true;
-                    } catch(e) { 
-                        console.error("Cloud Submission failed", e);
-                    } 
+                } catch (error) {
+                    alert("Ошибка при отправке: " + error.message);
+                } finally {
+                    setIsSubmitting(false);
                 }
-
-                // 2. Fallback to Local
-                if (!submissionSuccess) {
-                     const localReport = {
-                         ...newReport, 
-                         id: 'local_' + Date.now().toString()
-                     };
-                     const updatedReports = [localReport, ...reports];
-                     setReports(updatedReports);
-                     saveLocalReports(updatedReports);
-                     if (connectionStatus === 'local') {
-                         alert("⚠️ Режим 'Локально'. Заявка сохранена только на этом телефоне.");
-                     }
-                }
-                
-                setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
             };
 
             const findContractor = (catId) => CONTRACTORS.find(c => c.type === catId) || CONTRACTORS.find(c => c.type === 'admin');
@@ -912,7 +922,7 @@
                 return (
                     <div className="min-h-screen bg-gray-50 flex flex-col">
                         <div className="bg-white p-4 shadow-sm"><h2 className="text-lg font-bold mb-1">{T.new_report_title}</h2><p className="text-xs text-gray-500">{T.confirm_desc}</p></div>
-                        <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                        <div className="flex-1 p-4 space-y-4 overflow-y-auto pb-20"> {/* Added pb-20 for scroll space */}
                             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                                 <div className="flex gap-3 mb-4"><img src={preview} className="w-20 h-20 rounded-lg object-cover bg-gray-100"/><div><h3 className="font-bold text-sm">{analysis.type}</h3><p className="text-xs text-gray-500 mt-1">{analysis.description}</p></div></div>
                                 <div className="mb-4 flex items-center justify-between"><span className="text-sm font-bold text-gray-700">{T.importance_label}</span><ImportanceBadge importance={analysis.importance}/></div>
@@ -930,7 +940,17 @@
                                 </label>
                             </div>
                         </div>
-                        <div className="p-4 bg-white border-t"><button onClick={submitReport} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg">{T.submit_btn}</button></div>
+                        {/* Safe padding added for mobile browsers */}
+                        <div className="p-4 bg-white border-t pb-8 sm:pb-4">
+                            <button 
+                                onClick={submitReport} 
+                                disabled={isSubmitting}
+                                className={`w-full font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white active:scale-95'}`}
+                            >
+                                {isSubmitting && <Icon name="loader-2" className="animate-spin" size={20}/>}
+                                {isSubmitting ? "Отправка..." : T.submit_btn}
+                            </button>
+                        </div>
                     </div>
                 );
             }
