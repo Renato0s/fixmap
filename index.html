@@ -8,7 +8,7 @@
     <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#2563eb">
+    <meta name="theme-color" content="#1e3a8a">
     <meta name="mobile-web-app-capable" content="yes">
     
     <!-- Favicon -->
@@ -24,30 +24,58 @@
     <!-- NO FIREBASE - PURE LOCAL STORAGE -->
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overscroll-behavior-y: none; }
-        .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #3b82f6; box-shadow: 0 0 10px #3b82f6; animation: scan 2s linear infinite; z-index: 10; }
-        @keyframes scan { 0% { top: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+        
+        /* Custom Animations */
+        @keyframes scan-vertical { 
+            0% { top: 0%; opacity: 0; } 
+            10% { opacity: 1; } 
+            90% { opacity: 1; } 
+            100% { top: 100%; opacity: 0; } 
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        @keyframes slide-up {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fade-in-stagger {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .scan-line-hud { 
+            position: absolute; 
+            left: 0; 
+            width: 100%; 
+            height: 2px; 
+            background: #60a5fa; 
+            box-shadow: 0 0 15px #60a5fa, 0 0 30px #3b82f6; 
+            animation: scan-vertical 2s linear infinite; 
+            z-index: 20; 
+        }
+        
+        .grid-bg {
+            background-size: 40px 40px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        }
+
         #app-loader { position: fixed; inset: 0; background: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
         
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        
-        /* Анимация вспышки для огонька */
-        @keyframes flash-flame {
-            0%, 100% { transform: scale(1); opacity: 1; filter: brightness(1); }
-            50% { transform: scale(1.3); opacity: 1; filter: brightness(1.5) drop-shadow(0 0 10px rgba(251, 146, 60, 0.8)); }
-        }
-        .animate-flash-flame {
-            animation: flash-flame 0.8s ease-in-out 3;
-        }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
     </style>
 </head>
 <body>
     <div id="app-loader">
-        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E" class="w-24 h-24 mb-6 shadow-xl rounded-[20px] animate-bounce"/>
-        <h2 class="text-xl font-bold text-gray-800">FixMap Loading...</h2>
+        <div class="relative w-24 h-24 mb-6">
+            <div class="absolute inset-0 bg-blue-500/20 rounded-xl animate-ping"></div>
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E" class="w-full h-full rounded-xl shadow-xl relative z-10"/>
+        </div>
+        <h2 class="text-xl font-bold text-gray-800 tracking-tight">FixMap AI</h2>
     </div>
 
     <div id="root"></div>
@@ -57,7 +85,7 @@
         
         const APP_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E";
 
-        // GOOGLE API (GEMINI) - AI Still Works!
+        // GOOGLE API (GEMINI)
         const googleImageApiKey = "AIzaSyCi714-2bhNMqTpG3EKg2wVnvNmedUw_0I"; 
         
         // Contractors Data
@@ -76,7 +104,7 @@
                 welcome_subtitle: "Сообщите о проблеме, и ИИ направит её подрядчику.",
                 staff_login_btn: "Вход для сотрудников",
                 feed_title: "Лента событий",
-                take_photo: "Сделать фото",
+                take_photo: "Сканировать",
                 empty_feed: "Лента пуста. Станьте первым!",
                 streak_days: "дней подряд",
                 
@@ -110,15 +138,15 @@
                 back_to_list: "Назад к списку",
                 
                 // Analyze
-                analyzing_title: "ИИ анализирует фото...",
-                analyzing_desc: "Сжимаем изображение и ускоряем анализ...",
-                skip_btn: "Пропустить и заполнить вручную",
+                analyzing_title: "ИИ Анализ",
+                analyzing_desc: "Нейросеть обрабатывает изображение...",
+                skip_btn: "Ввести вручную",
                 fake_detected: "Ошибка: Фото не принято",
                 
                 // Form
                 new_report_title: "Новая заявка",
-                confirm_desc: "Подтвердите данные перед отправкой",
-                assigned_to: "Назначен подрядчик:",
+                confirm_desc: "Проверьте данные, определенные ИИ",
+                assigned_to: "Исполнитель:",
                 name_ph: "Ваше ФИО",
                 addr_ph: "Адрес или координаты",
                 premium_label: "Premium заявка",
@@ -147,7 +175,7 @@
                 welcome_subtitle: "Report a problem, AI assigns the contractor.",
                 staff_login_btn: "Staff Login",
                 feed_title: "Activity Feed",
-                take_photo: "Take a Photo",
+                take_photo: "Scan Issue",
                 empty_feed: "Feed is empty. Be the first!",
                 streak_days: "day streak",
                 
@@ -181,15 +209,15 @@
                 back_to_list: "Back to List",
 
                 // Analyze
-                analyzing_title: "AI Analyzing...",
-                analyzing_desc: "Compressing image for speed...",
-                skip_btn: "Skip and fill manually",
+                analyzing_title: "AI Analysis",
+                analyzing_desc: "Neural network processing...",
+                skip_btn: "Manual Input",
                 fake_detected: "Error: Photo rejected",
                 
                 // Form
                 new_report_title: "New Report",
-                confirm_desc: "Confirm details before submitting",
-                assigned_to: "Assigned Contractor:",
+                confirm_desc: "Verify AI detected details",
+                assigned_to: "Contractor:",
                 name_ph: "Your Name",
                 addr_ph: "Address or Coordinates",
                 premium_label: "Premium Request",
@@ -237,7 +265,6 @@
             };
         });
 
-        // SAFE DATE FORMATTER
         const formatDate = (d, lang) => {
             if(!d) return '';
             const date = new Date(d);
@@ -377,6 +404,9 @@
             const [address, setAddress] = React.useState('');
             const [isPremium, setIsPremium] = React.useState(false);
 
+            // AI Scanner State
+            const [scanStep, setScanStep] = React.useState(0);
+
             // Staff Login & Subscription
             const [email, setEmail] = React.useState('');
             const [pass, setPass] = React.useState('');
@@ -404,8 +434,28 @@
                 setReports(localData);
             }, []);
 
+            // 2. Scan Text Effect
+            React.useEffect(() => {
+                if (view === 'analyze') {
+                    const steps = [
+                        "Инициализация сенсоров...",
+                        "Сжатие изображения...",
+                        "Поиск дефектов...",
+                        "Классификация проблемы...",
+                        "Оценка приоритета...",
+                        "Генерация отчета..."
+                    ];
+                    let step = 0;
+                    setScanStep(0);
+                    const interval = setInterval(() => {
+                        step = (step + 1) % steps.length;
+                        setScanStep(step);
+                    }, 800);
+                    return () => clearInterval(interval);
+                }
+            }, [view]);
+
             const updateReportStatus = async (reportId, newStatus) => {
-                // Update Local State
                 const updatedReports = reports.map(r => r.id === reportId ? {...r, status: newStatus} : r);
                 setReports(updatedReports);
                 saveLocalReports(updatedReports);
@@ -420,7 +470,6 @@
                 setIsSubmitting(true);
 
                 try {
-                    // 1. Streak Logic
                     const currentStreakData = getStreakData();
                     const newStreakData = calculateStreak(currentStreakData);
                     localStorage.setItem(STREAK_KEY, JSON.stringify(newStreakData));
@@ -447,12 +496,10 @@
                         createdAt: new Date().toISOString()
                     };
 
-                    // Save Locally
                     const updatedReports = [newReport, ...reports];
                     setReports(updatedReports);
                     saveLocalReports(updatedReports);
                     
-                    // Reset Form
                     setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
                 
                 } catch (error) {
@@ -464,9 +511,8 @@
 
             const findContractor = (catId) => CONTRACTORS.find(c => c.type === catId) || CONTRACTORS.find(c => c.type === 'admin');
             const translateStatus = (status) => { const map = { 'Назначена': T.status_new, 'Принято': T.status_accepted, 'В работе': T.status_work, 'Выполнено': T.status_done, 'Отклонена': T.status_rejected }; return map[status] || status; };
-            const translateImportance = (imp) => { if (!imp) return T.imp_low; if (imp === 'High') return T.imp_high; if (imp === 'Medium') return T.imp_medium; return T.imp_low; };
             const StatusBadge = ({ status }) => { const colors = { 'Назначена': 'bg-blue-100 text-blue-700', 'Принято': 'bg-purple-100 text-purple-700', 'В работе': 'bg-yellow-100 text-yellow-700', 'Выполнено': 'bg-green-100 text-green-700', 'Отклонена': 'bg-red-100 text-red-700' }; return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${colors[status] || 'bg-gray-100'}`}>{translateStatus(status)}</span>; };
-            const ImportanceBadge = ({ importance }) => { const colors = { 'High': 'bg-red-100 text-red-700 border-red-200', 'Medium': 'bg-orange-100 text-orange-700 border-orange-200', 'Low': 'bg-green-100 text-green-700 border-green-200' }; return (<span className={`text-[10px] font-bold px-2 py-1 rounded border ${colors[importance] || colors['Low']}`}>{translateImportance(importance)}</span>); };
+            const ImportanceBadge = ({ importance }) => { const colors = { 'High': 'bg-red-50 text-red-600 border-red-200', 'Medium': 'bg-orange-50 text-orange-600 border-orange-200', 'Low': 'bg-green-50 text-green-600 border-green-200' }; return (<span className={`text-[10px] font-bold px-2 py-1 rounded border ${colors[importance] || colors['Low']}`}>{importance === 'High' ? T.imp_high : importance === 'Medium' ? T.imp_medium : T.imp_low}</span>); };
             
             const startGame = (selectedLang) => {
                 if (!userName.trim() || !userEmail.trim() || !userPass.trim()) { alert(TRANSLATIONS[selectedLang].reg_error); return; }
@@ -525,14 +571,14 @@
 
             if (view === 'lang_select') {
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 text-white p-6 relative overflow-hidden">
-                         {/* Background Decor */}
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 text-white p-6 relative overflow-hidden font-sans">
+                         {/* Animated Background */}
                          <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
                             <div className="absolute -top-[20%] -left-[20%] w-[70%] h-[70%] bg-blue-400/20 rounded-full blur-[100px] animate-pulse"></div>
                             <div className="absolute top-[40%] -right-[20%] w-[60%] h-[60%] bg-indigo-500/20 rounded-full blur-[100px] animate-pulse" style={{animationDelay: '1s'}}></div>
                          </div>
 
-                         <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
+                         <div className="relative z-10 flex flex-col items-center w-full max-w-sm" style={{animation: 'fade-in-stagger 0.6s ease-out'}}>
                              <div className="mb-8 flex flex-col items-center">
                                  <div className="relative group">
                                      <div className="absolute inset-0 bg-white/20 blur-xl rounded-full group-hover:bg-white/30 transition duration-500"></div>
@@ -682,7 +728,7 @@
                         </div>
                         <div className="flex-1 p-4 space-y-4 overflow-y-auto pb-20">
                             {selectedReport ? (
-                                <div className="space-y-4">
+                                <div className="space-y-4" style={{animation: 'slide-up 0.4s ease-out'}}>
                                     <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
                                         <div className="relative h-64 bg-gray-200">
                                             <img src={selectedReport.photoBefore} className="w-full h-full object-cover"/>
@@ -735,15 +781,59 @@
 
             if (view === 'analyze') {
                 if (analysis) { setView('result'); return null; }
+                const scanTexts = [
+                    "Инициализация сенсоров...",
+                    "Анализ геометрии...",
+                    "Поиск дефектов покрытия...",
+                    "Сверка с базой данных...",
+                    "Оценка серьезности...",
+                    "Формирование отчета..."
+                ];
+                
                 return (
-                    <div className="h-screen bg-gray-900 flex flex-col items-center justify-center relative">
-                        <img src={preview} className="absolute inset-0 w-full h-full object-cover opacity-50"/>
-                        <div className="scan-line"></div>
-                        <div className="relative z-10 text-center text-white px-6">
-                            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"/>
-                            <h2 className="text-xl font-bold">{T.analyzing_title}</h2>
-                            <p className="text-sm opacity-80 mt-2">{T.analyzing_desc}</p>
-                            <button onClick={() => setAnalysis({category_id: 'other', type: 'Manual', description: '...'})} className="mt-8 bg-white/10 px-4 py-2 rounded-full text-xs">{T.skip_btn}</button>
+                    <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center overflow-hidden font-sans">
+                        {/* Layer 1: Blurred Background Image */}
+                        <div className="absolute inset-0 z-0">
+                            <img src={preview} className="w-full h-full object-cover blur-xl opacity-40 scale-110"/>
+                            <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-blue-900/40 to-gray-900/80"></div>
+                        </div>
+
+                        {/* Layer 2: Grid Overlay */}
+                        <div className="absolute inset-0 z-10 grid-bg opacity-30"></div>
+
+                        {/* Layer 3: Scan Line */}
+                        <div className="scan-line-hud"></div>
+
+                        {/* Layer 4: Central HUD */}
+                        <div className="relative z-20 flex flex-col items-center">
+                            <div className="w-48 h-48 relative flex items-center justify-center mb-8">
+                                {/* Rings */}
+                                <div className="absolute inset-0 border-2 border-blue-500/30 rounded-full" style={{animation: 'pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'}}></div>
+                                <div className="absolute inset-4 border-2 border-blue-400/20 rounded-full" style={{animation: 'pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite', animationDelay: '0.5s'}}></div>
+                                <div className="absolute inset-0 border border-blue-500/50 rounded-full animate-spin duration-[10s]"></div>
+                                <div className="absolute inset-2 border-t-2 border-r-2 border-blue-400 rounded-full animate-spin duration-3"></div>
+                                
+                                {/* Center Icon */}
+                                <div className="bg-blue-600/20 backdrop-blur-md p-4 rounded-full border border-blue-400/50 shadow-[0_0_30px_rgba(59,130,246,0.5)]">
+                                    <Icon name="brain-circuit" size={40} className="text-white animate-pulse"/>
+                                </div>
+                            </div>
+
+                            <h2 className="text-3xl font-black text-white tracking-tight mb-2 drop-shadow-lg">
+                                AI SCANNING
+                            </h2>
+                            <div className="h-6 overflow-hidden">
+                                <p className="text-blue-200 text-sm font-mono uppercase tracking-widest animate-pulse">
+                                    {scanTexts[scanStep]}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Layer 5: Bottom cancel button */}
+                        <div className="absolute bottom-10 z-30">
+                            <button onClick={() => setAnalysis({category_id: 'other', type: 'Manual', description: '...'})} className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full text-xs font-bold tracking-wider transition-all">
+                                {T.skip_btn.toUpperCase()}
+                            </button>
                         </div>
                     </div>
                 );
@@ -752,36 +842,112 @@
             if (view === 'result' && analysis) {
                 const assigned = findContractor(analysis.category_id);
                 return (
-                    <div className="min-h-screen bg-gray-50 flex flex-col">
-                        <div className="bg-white p-4 shadow-sm"><h2 className="text-lg font-bold mb-1">{T.new_report_title}</h2><p className="text-xs text-gray-500">{T.confirm_desc}</p></div>
-                        <div className="flex-1 p-4 space-y-4 overflow-y-auto pb-20"> {/* Added pb-20 for scroll space */}
-                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                <div className="flex gap-3 mb-4"><img src={preview} className="w-20 h-20 rounded-lg object-cover bg-gray-100"/><div><h3 className="font-bold text-sm">{analysis.type}</h3><p className="text-xs text-gray-500 mt-1">{analysis.description}</p></div></div>
-                                <div className="mb-4 flex items-center justify-between"><span className="text-sm font-bold text-gray-700">{T.importance_label}</span><ImportanceBadge importance={analysis.importance}/></div>
-                                <div className="bg-gray-50 p-3 rounded-lg flex items-center justify-between border"><span className="text-xs text-gray-500">{T.assigned_to}</span><span className="text-xs font-bold text-gray-800 flex items-center gap-1"><Icon name="hard-hat" size={14} className="text-orange-500"/> {assigned?.name || 'Admin'}</span></div>
-                            </div>
-                            <div className="space-y-3">
-                                <input value={fio} onChange={e=>setFio(e.target.value)} placeholder={T.name_ph} className="w-full bg-white border p-3 rounded-xl text-sm"/>
-                                <div className="flex gap-2">
-                                    <input value={address} onChange={e=>setAddress(e.target.value)} placeholder={T.addr_ph} className="flex-1 bg-white border p-3 rounded-xl text-sm"/>
-                                    <button onClick={handleGeolocation} disabled={isLocating} className="bg-blue-50 text-blue-600 p-3 rounded-xl border border-blue-100 flex items-center justify-center w-12">{isLocating ? <div className="animate-spin"><Icon name="loader-2" size={20}/></div> : <Icon name="map-pin" size={20}/>}</button>
+                    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm p-0 sm:p-4">
+                        <div className="bg-gray-50 w-full max-w-md h-[90vh] sm:h-auto sm:max-h-[90vh] rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col relative" style={{animation: 'slide-up 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)'}}>
+                            
+                            {/* Header Image */}
+                            <div className="relative h-48 shrink-0">
+                                <img src={preview} className="w-full h-full object-cover"/>
+                                <div className="absolute inset-0 bg-gradient-to-t from-gray-50 via-transparent to-black/30"></div>
+                                <button onClick={() => {setAnalysis(null); setView('home')}} className="absolute top-4 right-4 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur transition-all">
+                                    <Icon name="x" size={20}/>
+                                </button>
+                                <div className="absolute bottom-4 left-6 right-6">
+                                    <div className="inline-flex items-center gap-2 bg-blue-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg mb-2">
+                                        <Icon name="sparkles" size={12}/>
+                                        AI CONFIDENCE: 98%
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-gray-900 leading-tight drop-shadow-sm">{analysis.type}</h2>
                                 </div>
-                                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer ${isPremium ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'}`}>
-                                    <div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center ${isPremium ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-400'}`}><Icon name="crown"/></div><div><div className="font-bold text-sm">{T.premium_label}</div><div className="text-[10px] text-gray-500">{T.premium_desc}</div></div></div>
-                                    <input type="checkbox" checked={isPremium} onChange={e=>setIsPremium(e.target.checked)} className="w-5 h-5 accent-yellow-500"/>
-                                </label>
                             </div>
-                        </div>
-                        {/* Safe padding added for mobile browsers */}
-                        <div className="p-4 bg-white border-t pb-8 sm:pb-4">
-                            <button 
-                                onClick={submitReport} 
-                                disabled={isSubmitting}
-                                className={`w-full font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white active:scale-95'}`}
-                            >
-                                {isSubmitting && <Icon name="loader-2" className="animate-spin" size={20}/>}
-                                {isSubmitting ? "Отправка..." : T.submit_btn}
-                            </button>
+
+                            {/* Scrollable Form Content */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+                                    <div className="flex items-start gap-3">
+                                        <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
+                                            <Icon name="info" size={20}/>
+                                        </div>
+                                        <p className="text-sm text-gray-600 leading-relaxed">{analysis.description}</p>
+                                    </div>
+                                    <div className="h-px bg-gray-100"></div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-500 font-medium">Приоритет:</span>
+                                        <ImportanceBadge importance={analysis.importance}/>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-500 font-medium">Исполнитель:</span>
+                                        <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                                            <Icon name="hard-hat" size={14} className="text-orange-500"/>
+                                            {assigned?.name || 'Admin'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="relative group">
+                                        <Icon name="user" size={18} className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-blue-600 transition-colors"/>
+                                        <input 
+                                            value={fio} 
+                                            onChange={e=>setFio(e.target.value)} 
+                                            placeholder={T.name_ph} 
+                                            className="w-full bg-white border border-gray-200 rounded-xl py-3 pl-11 pr-4 text-sm font-medium focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm"
+                                        />
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        <div className="relative group flex-1">
+                                            <Icon name="map-pin" size={18} className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-blue-600 transition-colors"/>
+                                            <input 
+                                                value={address} 
+                                                onChange={e=>setAddress(e.target.value)} 
+                                                placeholder={T.addr_ph} 
+                                                className="w-full bg-white border border-gray-200 rounded-xl py-3 pl-11 pr-4 text-sm font-medium focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm"
+                                            />
+                                        </div>
+                                        <button onClick={handleGeolocation} disabled={isLocating} className="bg-blue-50 hover:bg-blue-100 text-blue-600 w-12 rounded-xl border border-blue-200 flex items-center justify-center transition-colors">
+                                            {isLocating ? <div className="animate-spin"><Icon name="loader-2" size={20}/></div> : <Icon name="crosshair" size={20}/>}
+                                        </button>
+                                    </div>
+
+                                    <label className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${isPremium ? 'border-yellow-400 bg-yellow-50/50 shadow-md' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-colors ${isPremium ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                <Icon name="crown" size={20} fill={isPremium ? "currentColor" : "none"}/>
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-sm text-gray-900">{T.premium_label}</div>
+                                                <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wide opacity-80">{T.premium_desc}</div>
+                                            </div>
+                                        </div>
+                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isPremium ? 'bg-yellow-400 border-yellow-400' : 'border-gray-300 bg-transparent'}`}>
+                                            {isPremium && <Icon name="check" size={14} className="text-white"/>}
+                                        </div>
+                                        <input type="checkbox" checked={isPremium} onChange={e=>setIsPremium(e.target.checked)} className="hidden"/>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Sticky Footer */}
+                            <div className="p-5 bg-white border-t border-gray-100 shrink-0 pb-8 sm:pb-5">
+                                <button 
+                                    onClick={submitReport} 
+                                    disabled={isSubmitting}
+                                    className={`w-full font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 text-white ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.98]'}`}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Icon name="loader-2" className="animate-spin" size={20}/>
+                                            <span>Обработка...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Icon name="send" size={20}/>
+                                            <span>{T.submit_btn}</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );
@@ -869,7 +1035,7 @@
                                     key={r.id} 
                                     onClick={() => setSelectedReport(r)}
                                     className={`bg-white p-4 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-50 active:scale-[0.98] transition-all cursor-pointer relative overflow-hidden group hover:shadow-lg ${r.isPremium ? 'ring-2 ring-yellow-400/50' : ''}`}
-                                    style={{animation: `fadeIn 0.5s ease-out ${i * 0.1}s backwards`}}
+                                    style={{animation: `fade-in-stagger 0.5s ease-out ${i * 0.1}s backwards`}}
                                 >
                                     {r.isPremium && (
                                         <div className="absolute top-0 right-0 bg-gradient-to-bl from-yellow-400 to-orange-400 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-sm z-10">
