@@ -253,13 +253,15 @@
                 img.src = e.target.result;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; 
+                    // Оптимизация размера для экономии LocalStorage
+                    const MAX_WIDTH = 500; // Было 800
                     const scaleSize = MAX_WIDTH / img.width;
                     canvas.width = MAX_WIDTH;
                     canvas.height = img.height * scaleSize;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    // Сжатие качества до 0.5 (было 0.6)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
                     resolve(dataUrl.split(',')[1]); 
                 }
             };
@@ -293,9 +295,57 @@
             }
         };
         
-        // --- LOCAL STORAGE DATA ---
+        // --- LOCAL STORAGE DATA (С ЗАЩИТОЙ ОТ ПЕРЕПОЛНЕНИЯ) ---
         const LOCAL_REPORTS_KEY = 'fixmap_local_reports';
-        const saveLocalReports = (reports) => localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
+        
+        const saveLocalReports = (reports) => {
+            try {
+                localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
+            } catch (e) {
+                if (e.name === 'QuotaExceededError' || e.code === 22) {
+                    console.warn("Storage full, cleaning up old photos...");
+                    
+                    // Стратегия очистки:
+                    // 1. Создаем копию массива
+                    let cleanedReports = [...reports];
+                    let freed = false;
+
+                    // 2. Проходим с конца (старые заявки) и удаляем у них фото, оставляя текст
+                    // Оставляем фото только у 5 последних заявок
+                    for (let i = cleanedReports.length - 1; i >= 5; i--) {
+                        if (cleanedReports[i].photoBefore) {
+                            cleanedReports[i].photoBefore = null; // Удаляем фото
+                            try {
+                                localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(cleanedReports));
+                                freed = true;
+                                break; // Место освободилось, выходим
+                            } catch(err) { continue; }
+                        }
+                    }
+
+                    // 3. Если удаление фото не помогло, удаляем старые заявки целиком
+                    if (!freed) {
+                        while (cleanedReports.length > 10) { // Оставляем только 10 последних заявок
+                            cleanedReports.pop();
+                            try {
+                                localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(cleanedReports));
+                                freed = true;
+                                break;
+                            } catch(err) { continue; }
+                        }
+                    }
+                    
+                    if (freed) {
+                        // alert("⚠️ Память была переполнена. Старые фото удалены для сохранения новой заявки.");
+                    } else {
+                        alert("❌ Критическая ошибка памяти. Невозможно сохранить заявку.");
+                    }
+                } else {
+                    console.error("Storage Error:", e);
+                }
+            }
+        };
+
         const getLocalReports = () => {
             const data = localStorage.getItem(LOCAL_REPORTS_KEY);
             return data ? JSON.parse(data) : [];
