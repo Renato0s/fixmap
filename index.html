@@ -21,10 +21,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Firebase (Version 10 Compat) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- NO FIREBASE - PURE LOCAL STORAGE -->
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -45,10 +42,6 @@
         .animate-flash-flame {
             animation: flash-flame 0.8s ease-in-out 3;
         }
-
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
-        .status-dot.online { background-color: #22c55e; box-shadow: 0 0 5px #22c55e; }
-        .status-dot.offline { background-color: #ef4444; }
     </style>
 </head>
 <body>
@@ -64,21 +57,8 @@
         
         const APP_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%232563eb'/%3E%3Cpath d='M256 112c-79.5 0-144 64.5-144 144 0 79.5 144 256 144 256s144-176.5 144-256c0-79.5-64.5-144-144-144zm0 192c-26.5 0-48-21.5-48-48s21.5-48 48-48 48 21.5 48 48-21.5 48-48 48z' fill='white'/%3E%3C/svg%3E";
 
-        // GOOGLE API (GEMINI)
+        // GOOGLE API (GEMINI) - AI Still Works!
         const googleImageApiKey = "AIzaSyCi714-2bhNMqTpG3EKg2wVnvNmedUw_0I"; 
-        
-        // --- 🔥 ВСТАВЬТЕ СВОЙ FIREBASE CONFIG СЮДА 🔥 ---
-        // ВАЖНО: В консоли Firebase включите "Firestore Database" (Test Mode) и "Authentication" (Anonymous)
-        
-        const MANUAL_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyDK1WOWqpYtL_Z38lZCR22Ai-4xRMjfsP4",
-            authDomain: "fixmap-7eb27.firebaseapp.com",
-            projectId: "fixmap-7eb27",
-            storageBucket: "fixmap-7eb27.firebasestorage.app",
-            messagingSenderId: "35299390078",
-            appId: "1:35299390078:web:5619e137e2c95602501e2f",
-            measurementId: "G-BQ99D4ZZPV"
-        };
         
         // Contractors Data
         const CONTRACTORS = [
@@ -98,8 +78,6 @@
                 feed_title: "Лента событий",
                 take_photo: "Сделать фото",
                 empty_feed: "Лента пуста. Станьте первым!",
-                mode_local: "Оффлайн",
-                mode_cloud: "Онлайн",
                 streak_days: "дней подряд",
                 
                 // Registration
@@ -171,8 +149,6 @@
                 feed_title: "Activity Feed",
                 take_photo: "Take a Photo",
                 empty_feed: "Feed is empty. Be the first!",
-                mode_local: "Offline",
-                mode_cloud: "Online",
                 streak_days: "day streak",
                 
                 // Registration
@@ -239,43 +215,6 @@
             }
         };
 
-        // --- FIREBASE INIT (ROBUST FOR VERCEL) ---
-        let auth = null;
-        let db = null;
-        let isFirebaseAvailable = false;
-        let firebaseError = null;
-        
-        // Consistent Room ID
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fixmap-demo-room-v2';
-
-        const initFirebase = () => {
-            try {
-                // Priority 1: Manual Config (For Vercel/Static Deploy)
-                let config = MANUAL_FIREBASE_CONFIG;
-                
-                // Priority 2: Injected Config (For Canvas/Playground)
-                if (!config && typeof __firebase_config !== 'undefined') {
-                    config = JSON.parse(__firebase_config);
-                }
-
-                if (config) {
-                    if (!firebase.apps.length) firebase.initializeApp(config);
-                    auth = firebase.auth();
-                    db = firebase.firestore();
-                    isFirebaseAvailable = true;
-                    console.log("Firebase initialized. Room:", appId);
-                } else {
-                    firebaseError = "Config Missing";
-                    console.warn("No Firebase config found. Running in Local Mode.");
-                }
-            } catch (e) { 
-                firebaseError = e.message;
-                console.error("Firebase Initialization Error:", e); 
-            }
-        };
-        
-        initFirebase();
-
         // --- UTILS ---
         
         const compressImage = (file) => new Promise((resolve) => {
@@ -301,14 +240,9 @@
         // SAFE DATE FORMATTER
         const formatDate = (d, lang) => {
             if(!d) return '';
-            let date;
-            try {
-                if (d.toDate) date = d.toDate();
-                else if (d instanceof Date) date = d;
-                else date = new Date(d);
-                if (isNaN(date.getTime())) return '';
-                return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
-            } catch(e) { return ''; }
+            const date = new Date(d);
+            if (isNaN(date.getTime())) return '';
+            return new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
         };
 
         // --- STREAK LOGIC ---
@@ -332,7 +266,7 @@
             }
         };
         
-        // --- LOCAL STORAGE BACKUP ---
+        // --- LOCAL STORAGE DATA ---
         const LOCAL_REPORTS_KEY = 'fixmap_local_reports';
         const saveLocalReports = (reports) => localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
         const getLocalReports = () => {
@@ -342,8 +276,7 @@
 
         // --- IMAGE ANALYSIS SERVICE ---
         const callGeminiImage = async (payload) => {
-            // Updated models list to avoid 404 errors with deprecated/invalid aliases
-            const models = ["gemini-1.5-flash"];
+            const models = ["gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-flash-8b"];
             let lastError = null;
             for (const model of models) {
                 const controller = new AbortController();
@@ -358,12 +291,10 @@
                     });
                     clearTimeout(timeoutId);
                     if (response.ok) return await response.json();
-                    const errorText = await response.text();
-                    if (response.status === 403) throw new Error("REFERRER_BLOCKED");
+                    if (response.status === 404) { continue; }
                     lastError = new Error(`Error ${model}: ${response.status}`);
                 } catch (error) {
                     clearTimeout(timeoutId);
-                    if (error.message === "REFERRER_BLOCKED") throw error;
                     lastError = error;
                 }
             }
@@ -373,7 +304,6 @@
         const analyzeImage = async (file, lang) => {
             try {
                 const b64 = await compressImage(file);
-                // STRICT PROMPT FOR RUSSIAN LANGUAGE
                 const targetLang = lang === 'ru' ? 'RUSSIAN (Русский)' : 'ENGLISH';
                 const prompt = `Analyze this image for a civic issue app.
                 
@@ -425,10 +355,7 @@
             const [currentUser, setCurrentUser] = React.useState(null);
             
             // App State
-            const [authUser, setAuthUser] = React.useState(null);
-            const [connectionStatus, setConnectionStatus] = React.useState('local'); 
             const [isLocating, setIsLocating] = React.useState(false);
-            const [debugMsg, setDebugMsg] = React.useState(null);
             
             // User Data
             const [userName, setUserName] = React.useState('');
@@ -436,7 +363,6 @@
             const [userPass, setUserPass] = React.useState('');
             const [streak, setStreak] = React.useState(0);
             const [justSubmitted, setJustSubmitted] = React.useState(false);
-            // NEW: Loading state for submission
             const [isSubmitting, setIsSubmitting] = React.useState(false);
 
             // Data
@@ -473,95 +399,24 @@
                 const streakData = getStreakData();
                 setStreak(streakData.count);
 
-                // Initialize with local data to show something immediately
+                // Load from Local Storage
                 const localData = getLocalReports();
                 setReports(localData);
-
-                const initAuth = async () => {
-                    if (isFirebaseAvailable && auth) {
-                        try { 
-                            // Try setting persistence to LOCAL to avoid iframe issues
-                            await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-
-                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                                await auth.signInWithCustomToken(__initial_auth_token); 
-                            } else {
-                                await auth.signInAnonymously();
-                            }
-                        } catch(e) { 
-                            console.warn("Auth failed (Offline Mode):", e); 
-                            setConnectionStatus('local');
-                        }
-                    } else {
-                        setConnectionStatus('local');
-                    }
-                };
-                
-                initAuth();
-                
-                if (auth) {
-                    const unsubAuth = auth.onAuthStateChanged(u => {
-                        if (u) {
-                            setAuthUser(u);
-                        } else {
-                            setConnectionStatus('local');
-                        }
-                    });
-                    return () => unsubAuth();
-                }
             }, []);
 
-            // 2. Realtime Database Sync
-            React.useEffect(() => {
-                if (!authUser || !db) return;
-
-                console.log("Listening to DB:", appId);
-                // Listen to public data
-                const q = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports')
-                           .orderBy('createdAt', 'desc')
-                           .limit(50);
-
-                const unsub = q.onSnapshot(
-                    (snapshot) => {
-                        const loadedReports = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
-                        setReports(loadedReports);
-                        saveLocalReports(loadedReports); 
-                        
-                        if (selectedReport) {
-                            const updated = loadedReports.find(r => r.id === selectedReport.id);
-                            if (updated) setSelectedReport(updated);
-                        }
-                        setConnectionStatus('cloud'); 
-                    },
-                    (error) => {
-                        console.error("Firestore Sync Error:", error);
-                        setConnectionStatus('local');
-                        setDebugMsg(error.message);
-                    }
-                );
-
-                return () => unsub();
-            }, [authUser]);
-
             const updateReportStatus = async (reportId, newStatus) => {
-                // Optimistic UI
-                setReports(prev => prev.map(r => r.id === reportId ? {...r, status: newStatus} : r));
-                if (selectedReport && selectedReport.id === reportId) setSelectedReport(prev => ({...prev, status: newStatus}));
+                // Update Local State
+                const updatedReports = reports.map(r => r.id === reportId ? {...r, status: newStatus} : r);
+                setReports(updatedReports);
+                saveLocalReports(updatedReports);
                 
-                if (db && connectionStatus === 'cloud') { 
-                    try { 
-                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports')
-                                .doc(reportId)
-                                .update({ status: newStatus }); 
-                    } catch (e) { console.error("Status update error", e); } 
+                if (selectedReport && selectedReport.id === reportId) {
+                    setSelectedReport(prev => ({...prev, status: newStatus}));
                 }
             };
 
             const submitReport = async () => {
-                if (isSubmitting) return; // Prevent double clicks
+                if (isSubmitting) return;
                 setIsSubmitting(true);
 
                 try {
@@ -580,6 +435,7 @@
                     
                     const newReport = { 
                         ...analysis, 
+                        id: 'local_' + Date.now().toString(),
                         fio: fio || userName || 'Anon', 
                         email: userEmail, 
                         address: address || 'No address', 
@@ -588,43 +444,19 @@
                         contractorId: assigned?.id || 'admin', 
                         contractorName: assigned?.name || 'Admin', 
                         status: 'Назначена', 
-                        createdAt: new Date() // Standard Date
+                        createdAt: new Date().toISOString()
                     };
 
-                    let submissionSuccess = false;
-
-                    // 2. Try Firebase Cloud
-                    if (db && connectionStatus === 'cloud') {
-                        try { 
-                            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('reports').add(newReport); 
-                            submissionSuccess = true;
-                        } catch(e) { 
-                            console.error("Cloud Submission failed", e);
-                            // Don't alert here, just fallback to local
-                        } 
-                    }
-
-                    // 3. Fallback to Local
-                    if (!submissionSuccess) {
-                        const localReport = {
-                            ...newReport, 
-                            id: 'local_' + Date.now().toString()
-                        };
-                        const updatedReports = [localReport, ...reports];
-                        setReports(updatedReports);
-                        saveLocalReports(updatedReports);
-                        
-                        // Show alert only if explicitly in local mode or submission failed unexpectedly
-                        if (connectionStatus === 'local') {
-                            alert("⚠️ Оффлайн-режим. Заявка сохранена в телефоне.");
-                        }
-                    }
+                    // Save Locally
+                    const updatedReports = [newReport, ...reports];
+                    setReports(updatedReports);
+                    saveLocalReports(updatedReports);
                     
                     // Reset Form
                     setFile(null); setAnalysis(null); setFio(userName); setAddress(''); setIsPremium(false); setView('home');
                 
                 } catch (error) {
-                    alert("Ошибка при отправке: " + error.message);
+                    alert("Ошибка: " + error.message);
                 } finally {
                     setIsSubmitting(false);
                 }
@@ -771,7 +603,7 @@
                              </div>
                              
                              <p className="mt-8 text-[10px] text-blue-200/40 text-center font-medium uppercase tracking-widest">
-                                 FixMap v2.1 • Secure Cloud Sync
+                                 FixMap v2.1 • Local Storage Edition
                              </p>
                          </div>
                     </div>
@@ -848,7 +680,7 @@
                             )}
                             <button onClick={() => { setSelectedReport(null); setView('home'); }} className="text-red-500 text-xs bg-red-50 px-3 py-1 rounded-lg font-bold">{T.logout}</button>
                         </div>
-                        <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                        <div className="flex-1 p-4 space-y-4 overflow-y-auto pb-20">
                             {selectedReport ? (
                                 <div className="space-y-4">
                                     <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
@@ -994,10 +826,6 @@
                     <div className="p-4">
                         <div className="flex justify-between items-center mb-4 px-2">
                             <h2 className="font-bold text-gray-800">{T.feed_title}</h2>
-                            <div className="flex gap-2 items-center cursor-pointer" onClick={() => debugMsg && alert(`Connection Debug:\n${debugMsg}\nFirebase: ${isFirebaseAvailable ? "Yes" : "No"}`)}>
-                                <span className={`status-dot ${connectionStatus === 'cloud' ? 'online' : 'offline'}`}></span>
-                                <span className="text-[10px] font-bold text-gray-500">{connectionStatus === 'cloud' ? T.mode_cloud : T.mode_local}</span>
-                            </div>
                         </div>
                         {reports.map(r => (
                             <div key={r.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3 ${r.isPremium ? 'ring-1 ring-yellow-200' : ''}`}>
