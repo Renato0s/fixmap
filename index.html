@@ -382,20 +382,36 @@
             try {
                 const b64 = await compressImage(file);
                 const targetLang = lang === 'ru' ? 'RUSSIAN (Русский)' : 'ENGLISH';
-                const prompt = `Analyze this image for a civic issue app.
                 
-                IMPORTANT: OUTPUT MUST BE IN ${targetLang}.
+                // --- ОБНОВЛЕННЫЙ СТРОГИЙ ПРОМПТ ---
+                const prompt = `
+                ACT AS A STRICT CIVIC ISSUE AUDITOR.
+
+                YOUR TASK: Analyze this image and decide if it is a VALID urban problem report.
                 
-                STEP 1: VALIDITY CHECK. Mark "is_fake": true if selfie/screen/unrelated.
-                STEP 2: DETAILED ANALYSIS. Thorough description in ${targetLang}.
+                STRICT FILTERING RULES:
+                1. REJECT ("is_fake": true) if the image contains:
+                   - Selfies or People posing.
+                   - Screenshots or digital screens.
+                   - Indoor objects (furniture, food, pets) unless it's a pipe leak.
+                   - Beautiful landscapes/streets with NO visible damage/trash.
+                   - Memes or text documents.
                 
-                Return JSON:
+                2. ACCEPT ("is_fake": false) ONLY if you clearly see:
+                   - Road damage (potholes, cracks, missing tiles).
+                   - Garbage dumps, overflowing bins, litter.
+                   - Water leaks, floods, burst pipes.
+                   - Broken street lights, exposed wires, dark streets.
+                   - Vandalism, broken benches/stops, fallen trees.
+
+                OUTPUT FORMAT (JSON ONLY):
+                Result must be in ${targetLang}.
                 {
                     "is_fake": boolean,
-                    "fake_reason": "String in ${targetLang}",
+                    "fake_reason": "Short polite explanation why rejected (e.g. 'This looks like a selfie, not a civic issue')",
                     "category_id": "road" | "waste" | "water" | "light" | "other",
-                    "type": "Short title in ${targetLang}",
-                    "description": "Long detailed description in ${targetLang}",
+                    "type": "Short technical title (e.g. 'Deep Pothole', 'Overflowing Dumpster')",
+                    "description": "Professional description of the damage and location context",
                     "importance": "High" | "Medium" | "Low"
                 }`;
                 
